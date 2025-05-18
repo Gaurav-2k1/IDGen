@@ -4,11 +4,11 @@ import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useDesignStore } from '@/lib/Store'
 import { useToast } from '@/components/ui/use-toast'
-import { fetchDesignById } from '@/services/designService'
 import { ErrorBoundary } from 'next/dist/client/components/error-boundary'
-import { Toolbar } from '@/components/canvas/Toolbar'
 import { Sidebar } from '@/components/canvas/Sidebar'
-import { Canvas } from '@/components/canvas/Canvas'
+import {Canvas} from '@/components/canvas/Canvas'
+import { getDesign } from '@/services/design-service'
+import {Toolbar} from '@/components/canvas/Toolbar'
 //import { fetchDesignById } from '@/services/designService'
 
 export default function CollaborativeEditorPage() {
@@ -20,9 +20,11 @@ export default function CollaborativeEditorPage() {
   // Load the shared design when the component mounts
   useEffect(() => {
     const loadSharedDesign = async () => {
+      console.log('Loading shared design with sessionId:', sessionId)
       try {
         if (typeof sessionId === 'string') {
-          const design = await fetchDesignById(sessionId)
+          const design = await getDesign(sessionId)
+          console.log('Design fetched:', design)
           if (design) {
             loadDesign(design)
             toast({

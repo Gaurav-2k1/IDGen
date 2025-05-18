@@ -84,7 +84,7 @@ const LayerItem = ({ element, isSelected, onSelect, onToggleVisibility, onLock, 
   
   const getLayerName = () => {
     switch (type) {
-      case 'text': return data.content?.substring(0, 15) || 'Text';
+      case 'text': return data.text?.substring(0, 15) || 'Text';
       case 'image': return 'Image' + (data.alt ? `: ${data.alt.substring(0, 10)}` : '');
       case 'shape': return data.shapeType.charAt(0).toUpperCase() + data.shapeType.slice(1);
       default: return 'Layer';
@@ -278,7 +278,7 @@ export function Sidebar() {
   // State management
   const [activeTab, setActiveTab] = useState('elements')
   const [textSettings, setTextSettings] = useState({
-    content: '',
+    text: '',
     fontSize: 16,
     fontWeight: 'normal',
     fontFamily: 'Inter',
@@ -322,8 +322,8 @@ export function Sidebar() {
       
       // Search by content for text elements
       if (element.type === 'text' && 
-          element.data.content && 
-          element.data.content.toLowerCase().includes(searchQuery.toLowerCase())) {
+          element.data.text && 
+          element.data.text.toLowerCase().includes(searchQuery.toLowerCase())) {
         return true;
       }
       
@@ -345,7 +345,7 @@ export function Sidebar() {
   
   // Add text element
   const handleAddText = () => {
-    const { content, fontSize, fontWeight, fontFamily, textAlign, color } = textSettings;
+    const { text, fontSize, fontWeight, fontFamily, textAlign, color } = textSettings;
     
     addElement({
       id: generateId(),
@@ -353,7 +353,7 @@ export function Sidebar() {
       position: { x: 50, y: 50 },
       zIndex: elements.length + 1,
       data: {
-        content: content.trim() || 'Sample Text',
+        text: text.trim() || 'Sample Text',
         fontSize,
         fontWeight,
         fontFamily,
@@ -752,8 +752,8 @@ export function Sidebar() {
                   <div className="space-y-3">
                     <Textarea
                       placeholder="Enter text content"
-                      value={textSettings.content}
-                      onChange={(e) => setTextSettings({...textSettings, content: e.target.value})}
+                      value={textSettings.text}
+                      onChange={(e) => setTextSettings({...textSettings, text: e.target.value})}
                       className="min-h-[80px]"
                     />
                     

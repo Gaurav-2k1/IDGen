@@ -3,11 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
-import { Canvas } from '@/components/canvas/Canvas'
-import { Toolbar } from '@/components/canvas/Toolbar'
 import { Sidebar } from '@/components/canvas/Sidebar'
 import ErrorBoundary from '@/components/ui/error-boundary'
 import { useDesignStore } from '@/lib/Store'
+import {Canvas} from '@/components/canvas/Canvas'
+import {Toolbar} from '@/components/canvas/Toolbar'
 
 export default function EditorPage() {
   const router = useRouter()

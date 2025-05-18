@@ -1,136 +1,133 @@
-'use client'
+// components/Canvas/CanvasElement.tsx
+import { useState, useRef, useEffect } from 'react'
+import { ElementType, Position } from '@/lib/types'
 
-import { useRef, useState } from 'react'
 import { useDesignStore } from '@/lib/Store'
+import TextElement from './text-element'
+import ImageElement from './image-element'
+import ShapeElement from './shape-element'
+import ResizeHandles from './resizeHandles'
 
-// This is an example implementation for a draggable element on the canvas
-export function CanvasElement({ element }) {
-  const { 
-    updateElementPosition, 
-    setSelectedElement, 
-    selectedElementId,
-    startDrag,
-    endDrag
-  } = useDesignStore()
-  
-  const elementRef = useRef(null)
+interface CanvasElementProps {
+  element: ElementType
+  isSelected: boolean
+  readOnly: boolean
+  onDragStart: () => void
+  onDrag: (position: Position) => void
+  onDragEnd: () => void
+  onClick: () => void
+}
+
+const CanvasElement = ({ 
+  element, 
+  isSelected, 
+  readOnly,
+  onDragStart, 
+  onDrag, 
+  onDragEnd, 
+  onClick 
+}: CanvasElementProps) => {
+  const elementRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const [dragStart, setDragStart] = useState<Position | null>(null)
   
-  const isSelected = selectedElementId === element.id
+  const { updateElementDimensions } = useDesignStore()
 
-  // Handle mouse down for dragging
-  const handleMouseDown = (e) => {
+  // Handle mouse down on element
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (readOnly) return
+    
     e.stopPropagation()
+    onClick()
     
-    // Select this element
-    setSelectedElement(element.id)
-    
-    // Start tracking drag
-    startDrag()
-    setIsDragging(true)
-    
-    // Calculate offset from mouse position to element position
-    const rect = elementRef.current.getBoundingClientRect()
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    })
-    
-    // Add global event listeners
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    // Start dragging only on direct element click (not on resize handles)
+    if ((e.target as HTMLElement).getAttribute('data-resize-handle') !== 'true') {
+      setIsDragging(true)
+      setDragStart({ x: e.clientX, y: e.clientY })
+      onDragStart()
+    }
   }
-  
-  // Handle mouse move during drag
-  const handleMouseMove = (e) => {
-    if (!isDragging) return
+
+  // Handle mouse move
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !dragStart) return
+      
+      // Calculate position difference from drag start
+      const dx = e.clientX - dragStart.x
+      const dy = e.clientY - dragStart.y
+      
+      // Update element position
+      onDrag({
+        x: element.position.x + dx,
+        y: element.position.y + dy
+      })
+      
+      // Update drag start point
+      setDragStart({ x: e.clientX, y: e.clientY })
+    }
     
-    // Calculate new position based on mouse position and offset
-    const canvasRect = elementRef.current.parentElement.getBoundingClientRect()
-    const newX = e.clientX - canvasRect.left - dragOffset.x
-    const newY = e.clientY - canvasRect.top - dragOffset.y
+    const handleMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false)
+        onDragEnd()
+      }
+    }
     
-    // Update element position in store
-    updateElementPosition(element.id, { x: newX, y: newY })
-  }
-  
-  // Handle mouse up to end drag
-  const handleMouseUp = () => {
-    setIsDragging(false)
-    endDrag() // Notify store that drag has ended
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
     
-    // Clean up event listeners
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, dragStart, onDrag, onDragEnd, element.position])
+
+  // Handle resize
+  const handleResize = (width: number, height: number) => {
+    updateElementDimensions(element.id, width, height)
   }
-  
-  // Prevent selection from being lost when clicking inside the element
-  const handleClick = (e) => {
-    e.stopPropagation()
-    setSelectedElement(element.id)
+
+  // Render element based on type
+  const renderElement = () => {
+    switch (element.type) {
+      case 'text':
+        return <TextElement element={element} isSelected={isSelected} readOnly={readOnly} />
+      case 'image':
+        return <ImageElement element={element} />
+      case 'shape':
+        return <ShapeElement element={element} />
+      default:
+        return <div>Unknown element type</div>
+    }
   }
-  
+
   return (
     <div
       ref={elementRef}
-      className={`absolute cursor-move ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+      className={`absolute ${isSelected && !readOnly ? 'element-selected' : ''}`}
       style={{
         left: `${element.position.x}px`,
         top: `${element.position.y}px`,
         zIndex: element.zIndex,
+        cursor: readOnly ? 'default' : 'move',
+        outline: isSelected && !readOnly ? '2px solid blue' : 'none'
       }}
       onMouseDown={handleMouseDown}
-      onClick={handleClick}
     >
-      {/* Render element based on its type */}
-      {element.type === 'text' && (
-        <div
-          style={{
-            color: element.data.color,
-            fontSize: `${element.data.fontSize}px`,
-            fontWeight: element.data.fontWeight,
-            fontFamily: element.data.fontFamily,
-            textAlign: element.data.textAlign,
-          }}
-        >
-          {element.data.content}
-        </div>
-      )}
+      {renderElement()}
       
-      {element.type === 'image' && (
-        <img
-          src={element.data.src}
-          alt={element.data.alt}
-          width={element.data.width}
-          height={element.data.height}
+      {/* Resize handles shown only when selected and not read-only */}
+      {isSelected && !readOnly && (
+        <ResizeHandles
+          element={element}
+          onResize={handleResize}
         />
       )}
-      
-      {element.type === 'shape' && element.data.shapeType === 'rectangle' && (
-        <div
-          style={{
-            width: `${element.data.width}px`,
-            height: `${element.data.height}px`,
-            backgroundColor: element.data.backgroundColor,
-            border: element.data.border,
-          }}
-        />
-      )}
-      
-      {element.type === 'shape' && element.data.shapeType === 'circle' && (
-        <div
-          style={{
-            width: `${element.data.width}px`,
-            height: `${element.data.height}px`,
-            backgroundColor: element.data.backgroundColor,
-            border: element.data.border,
-            borderRadius: '50%',
-          }}
-        />
-      )}
-      
-      {/* You can add more element types here */}
     </div>
   )
 }
+
+export default CanvasElement

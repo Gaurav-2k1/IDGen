@@ -1,10 +1,9 @@
-'use client'
+ 'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useDesignStore } from '@/lib/Store'
-import { saveDesign, createNewDesign } from '@/services/designService'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -26,6 +25,7 @@ import {
   Users
 } from 'lucide-react'
 import ToolbarButton from '../ui/toolbar-button'
+import { createDesign, updateDesign } from '@/services/design-service'
 
 interface ToolbarProps {
   collaborative?: boolean
@@ -73,17 +73,17 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
       
       setDesign(updatedDesign)
       
-      const savedDesign = await saveDesign(updatedDesign)
+      const savedDesign = await createDesign(updatedDesign)
       
-      if (savedDesign?.id) {
-        setDesign(savedDesign)
-        toast({
-          title: "Design saved",
-          description: "Your design has been saved successfully",
-        })
-      }
+      // if (savedDesign?.id) {
+      //   setDesign(savedDesign)
+      //   toast({
+      //     title: "Design saved",
+      //     description: "Your design has been saved successfully",
+      //   })
+      // }
       
-      setSaveDialogOpen(false)
+      // setSaveDialogOpen(false)
     } catch (error) {
       toast({
         variant: "destructive",
@@ -102,13 +102,13 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
         title: designTitle,
         description: designDescription,
         elements,
-        canvasSize,
+        canvasSize, 
         canvasBackground,
         lastModified: new Date().toISOString(),
         isShared: true
       }
       
-      const savedDesign = await saveDesign(updatedDesign)
+      const savedDesign = await updateDesign("",updatedDesign)
       
       if (savedDesign?.id) {
         setDesign(savedDesign)
@@ -342,3 +342,169 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
     </>
   )
 }
+// components/Editor/ToolbarPanel.tsx
+// import { useState } from 'react'
+// import { useDesignStore } from '@/lib/Store'
+// import { generateId } from '@/lib/utils'
+
+// const Toolbar = () => {
+//   const { addElement } = useDesignStore()
+//   const [activeTab, setActiveTab] = useState('elements')
+  
+//   // Add text element to canvas
+//   const handleAddText = () => {
+//     addElement({
+//       id: generateId(),
+//       type: 'text',
+//       position: { x: 100, y: 100 },
+//       zIndex: 10,
+//       data: {
+//         text: 'Double click to edit text',
+//         fontSize: 24,
+//         fontFamily: 'Arial',
+//         color: '#000000',
+//         fontWeight: 'normal',
+//         fontStyle: 'normal',
+//         textAlign: 'left',
+//         width: 250,
+//         height: 50
+//       }
+//     })
+//   }
+  
+//   // Add image element to canvas
+//   const handleAddImage = () => {
+//     // In a real app, you would show an image picker/upload dialog
+//     // For now, we'll add a placeholder image
+//     addElement({
+//       id: generateId(),
+//       type: 'image',
+//       position: { x: 100, y: 100 },
+//       zIndex: 5,
+//       data: {
+//         src: 'https://via.placeholder.com/300x200',
+//         alt: 'Placeholder image',
+//         width: 300,
+//         height: 200
+//       }
+//     })
+//   }
+  
+//   // Add shape element to canvas
+//   const handleAddShape = (shapeType: string) => {
+//     addElement({
+//       id: generateId(),
+//       type: 'shape',
+//       position: { x: 100, y: 100 },
+//       zIndex: 1,
+//       data: {
+//         shapeType,
+//         width: 150,
+//         height: 150,
+//         backgroundColor: '#4CAF50',
+//         borderRadius: shapeType === 'rectangle' ? 8 : 0,
+//         borderWidth: 0,
+//         borderColor: '#000000'
+//       }
+//     })
+//   }
+  
+//   // Render tabs based on active tab
+//   const renderTabContent = () => {
+//     switch (activeTab) {
+//       case 'elements':
+//         return (
+//           <div className="flex flex-col items-center space-y-4 py-4">
+//             <button
+//               onClick={handleAddText}
+//               className="tool-button w-12 h-12 flex items-center justify-center rounded hover:bg-gray-100"
+//               title="Add Text"
+//             >
+//               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+//                 <path d="M4 7V4h16v3M9 20h6M12 4v16"/>
+//               </svg>
+//             </button>
+            
+//             <button
+//               onClick={handleAddImage}
+//               className="tool-button w-12 h-12 flex items-center justify-center rounded hover:bg-gray-100"
+//               title="Add Image"
+//             >
+//               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+//                 <rect x="3" y="3" width="18" height="18" rx="2"/>
+//                 <circle cx="8.5" cy="8.5" r="1.5"/>
+//                 <path d="M21 15l-5-5L5 21"/>
+//               </svg>
+//             </button>
+            
+//             <button
+//               onClick={() => handleAddShape('rectangle')}
+//               className="tool-button w-12 h-12 flex items-center justify-center rounded hover:bg-gray-100"
+//               title="Add Rectangle"
+//             >
+//               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+//                 <rect x="3" y="3" width="18" height="18" rx="2"/>
+//               </svg>
+//             </button>
+            
+//             <button
+//               onClick={() => handleAddShape('circle')}
+//               className="tool-button w-12 h-12 flex items-center justify-center rounded hover:bg-gray-100"
+//               title="Add Circle"
+//             >
+//               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+//                 <circle cx="12" cy="12" r="10"/>
+//               </svg>
+//             </button>
+            
+//             <button
+//               onClick={() => handleAddShape('triangle')}
+//               className="tool-button w-12 h-12 flex items-center justify-center rounded hover:bg-gray-100"
+//               title="Add Triangle"
+//             >
+//               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+//                 <path d="M3 20h18L12 4z"/>
+//               </svg>
+//             </button>
+//           </div>
+//         )
+//       case 'templates':
+//         return (
+//           <div className="p-4">
+//             <p className="text-center text-sm text-gray-500">
+//               Templates panel (coming soon)
+//             </p>
+//           </div>
+//         )
+//       default:
+//         return null
+//     }
+//   }
+  
+//   return (
+//     <div className="h-full flex flex-col">
+//       {/* Tab navigation */}
+//       <div className="flex border-b">
+//         <button
+//           className={`flex-1 py-2 text-xs font-medium ${activeTab === 'elements' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
+//           onClick={() => setActiveTab('elements')}
+//         >
+//           Elements
+//         </button>
+//         <button
+//           className={`flex-1 py-2 text-xs font-medium ${activeTab === 'templates' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
+//           onClick={() => setActiveTab('templates')}
+//         >
+//           Templates
+//         </button>
+//       </div>
+      
+//       {/* Tab content */}
+//       <div className="flex-1 overflow-y-auto">
+//         {renderTabContent()}
+//       </div>
+//     </div>
+//   )
+// }
+
+// export default Toolbar;
