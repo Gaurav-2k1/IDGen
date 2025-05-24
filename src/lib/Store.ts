@@ -30,12 +30,13 @@ import { v4 as uuidv4 } from 'uuid'
 import { toast } from '@/components/ui/use-toast'
 
 // Constants
-const MAX_HISTORY_STATES = 30
-const DEFAULT_CANVAS_SIZE = { width: 800, height: 600 }
-const DEFAULT_CANVAS_BACKGROUND = '#ffffff'
+export const MAX_HISTORY_STATES = 30
+export const DEFAULT_CANVAS_SIZE: CanvasSize = { width: 800, height: 600 }
+export const DEFAULT_CANVAS_BACKGROUND = '#ffffff'
+export const AUTOSAVE_DELAY = 2000 // 2 seconds
 
 // Initial history state
-const INITIAL_HISTORY_STATE: HistoryState = {
+export const INITIAL_HISTORY_STATE: HistoryState = {
   elements: [],
   backsideElements: [],
   canvasSize: DEFAULT_CANVAS_SIZE,
@@ -46,7 +47,7 @@ const INITIAL_HISTORY_STATE: HistoryState = {
 export const useDesignStore = create<DesignState>()(
   devtools(
     persist(
-      (set, get) => ({
+      (set: (fn: (state: DesignState) => Partial<DesignState>) => void, get: () => DesignState) => ({
         // State
         elements: [],
         backsideElements: [],
@@ -79,7 +80,7 @@ export const useDesignStore = create<DesignState>()(
         toggleElementVisibility: (id: string, isBackside?: boolean) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          const element = elements.find(el => el.id === id)
+          const element = elements.find((el: ElementType) => el.id === id)
           if (element) {
             get().updateElement(id, { isVisible: !element.isVisible }, isBackside)
           }
@@ -87,13 +88,13 @@ export const useDesignStore = create<DesignState>()(
         toggleElementLock: (id: string, isBackside?: boolean) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          const element = elements.find(el => el.id === id)
+          const element = elements.find((el: ElementType) => el.id === id)
           if (element) {
             get().updateElement(id, { isLocked: !element.isLocked }, isBackside)
           }
         },
         zoomLevel: 1,
-        setZoomLevel: (level: number) => set({ zoomLevel: level }),
+        setZoomLevel: (level: number) => set(() => ({ zoomLevel: level })),
         saveProject: async () => {
           await get().saveDesignToDatabase()
         },
@@ -113,75 +114,75 @@ export const useDesignStore = create<DesignState>()(
         },
         
         // Methods
-        setDesign: (design) => set({ design }),
+        setDesign: (design: Design | null) => set(() => ({ design })),
         
-        setSelectedElement: (id) => set({ selectedElementId: id }),
+        setSelectedElement: (id: string | null) => set(() => ({ selectedElementId: id })),
         
-        startDrag: () => set({ isDragging: true }),
+        startDrag: () => set(() => ({ isDragging: true })),
         
-        endDrag: () => set({ isDragging: false }),
+        endDrag: () => set(() => ({ isDragging: false })),
         
-        addElement: (element, isBackside = false) => {
+        addElement: (element: ElementType, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          set({ 
+          set(() => ({ 
             [isBackside ? 'backsideElements' : 'elements']: [...elements, element]
+          }))
+        },
+        
+        updateElement: (id: string, updates: Partial<ElementType>, isBackside = false) => {
+          set((state: DesignState) => {
+            const elements = isBackside ? state.backsideElements : state.elements
+            const elementIndex = elements.findIndex((el: ElementType) => el.id === id)
+            
+            if (elementIndex === -1) return state
+            
+            const updatedElements = [...elements]
+            const currentElement = updatedElements[elementIndex]
+            updatedElements[elementIndex] = {
+              ...currentElement,
+              ...updates,
+              type: currentElement.type // Preserve the original type
+            } as ElementType
+            
+            return {
+              [isBackside ? 'backsideElements' : 'elements']: updatedElements
+            }
           })
         },
         
-        updateElement: (id, updates, isBackside = false) => {
+        updateElementPosition: (id: string, position: Position, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.map(el => 
-              el.id === id ? { ...el, ...updates } : el
-            )
-          })
-        },
-        
-        updateElementPosition: (id, position, isBackside = false) => {
-          const state = get()
-          const elements = isBackside ? state.backsideElements : state.elements
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+          set(() => ({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map((el: ElementType) =>
               el.id === id ? { ...el, position } : el
             )
-          })
+          }))
         },
         
-        updateMultipleElementPositions: (updates, isBackside = false) => {
+        updateElementDimensions: (id: string, width: number, height: number, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.map(el => {
-              const update = updates.find(u => u.id === el.id)
-              return update ? { ...el, position: update.position } : el
-            })
-          })
-        },
-        
-        updateElementDimensions: (id, width, height, isBackside = false) => {
-          const state = get()
-          const elements = isBackside ? state.backsideElements : state.elements
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+          set(() => ({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map((el: ElementType) =>
               el.id === id ? { ...el, data: { ...el.data, width, height } } : el
             )
-          })
+          }))
         },
         
-        deleteElement: (id, isBackside = false) => {
+        deleteElement: (id: string, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.filter(el => el.id !== id)
-          })
+          set(() => ({
+            [isBackside ? 'backsideElements' : 'elements']: elements.filter((el: ElementType) => el.id !== id)
+          }))
         },
         
-        duplicateElement: (id, isBackside = false) => {
+        duplicateElement: (id: string, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          const element = elements.find(el => el.id === id)
+          const element = elements.find((el: ElementType) => el.id === id)
           if (element) {
             const newElement = {
               ...element,
@@ -191,58 +192,58 @@ export const useDesignStore = create<DesignState>()(
                 y: element.position.y + 20
               }
             }
-            set({
+            set(() => ({
               [isBackside ? 'backsideElements' : 'elements']: [...elements, newElement]
-            })
+            }))
           }
         },
         
-        updateElementZIndex: (id, direction, isBackside = false) => {
+        updateElementZIndex: (id: string, direction: 'up' | 'down', isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          const element = elements.find(el => el.id === id)
+          const element = elements.find((el: ElementType) => el.id === id)
           if (element) {
             const newZIndex = direction === 'up' ? element.zIndex + 1 : element.zIndex - 1
-            set({
-              [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+            set(() => ({
+              [isBackside ? 'backsideElements' : 'elements']: elements.map((el: ElementType) =>
                 el.id === id ? { ...el, zIndex: newZIndex } : el
               )
-            })
+            }))
           }
         },
         
-        setCanvasBackground: (color) => {
-          set({ canvasBackground: color })
+        setCanvasBackground: (color: string) => {
+          set(() => ({ canvasBackground: color }))
         },
         
-        setCanvasSize: (size) => {
-          set({ canvasSize: size })
+        setCanvasSize: (size: CanvasSize) => {
+          set(() => ({ canvasSize: size }))
         },
         
-        moveElementForward: (id, isBackside = false) => {
+        moveElementForward: (id: string, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          const maxZIndex = Math.max(...elements.map(el => el.zIndex))
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+          const maxZIndex = Math.max(...elements.map((el: ElementType) => el.zIndex))
+          set(() => ({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map((el: ElementType) =>
               el.id === id ? { ...el, zIndex: maxZIndex + 1 } : el
             )
-          })
+          }))
         },
         
-        moveElementBackward: (id, isBackside = false) => {
+        moveElementBackward: (id: string, isBackside = false) => {
           const state = get()
           const elements = isBackside ? state.backsideElements : state.elements
-          const minZIndex = Math.min(...elements.map(el => el.zIndex))
-          set({
-            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+          const minZIndex = Math.min(...elements.map((el: ElementType) => el.zIndex))
+          set(() => ({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map((el: ElementType) =>
               el.id === id ? { ...el, zIndex: minZIndex - 1 } : el
             )
-          })
+          }))
         },
         
         resetDesign: () => {
-          set({
+          set(() => ({
             elements: [],
             backsideElements: [],
             selectedElementId: null,
@@ -251,17 +252,17 @@ export const useDesignStore = create<DesignState>()(
             design: null,
             history: [],
             historyIndex: -1
-          })
+          }))
         },
         
-        loadDesign: (design) => {
-          set({
+        loadDesign: (design: Design) => {
+          set(() => ({
             elements: design.elements || [],
             backsideElements: design.backsideElements || [],
             canvasSize: design.canvasSize,
             canvasBackground: design.canvasBackground,
             design
-          })
+          }))
         },
         
         saveDesign: async () => {
@@ -275,27 +276,32 @@ export const useDesignStore = create<DesignState>()(
             canvasBackground: state.canvasBackground,
             lastModified: new Date().toISOString()
           }
-          set({ design })
+          set(() => ({ design }))
           return design
         },
         
         saveStateToHistory: () => {
-          const state = get()
-          const newState: HistoryState = {
-            elements: state.elements,
-            backsideElements: state.backsideElements,
-            canvasSize: state.canvasSize,
-            canvasBackground: state.canvasBackground
-          }
-          
-          // Remove future states if we're not at the end of history
-          const newHistory = state.history.slice(0, state.historyIndex + 1)
-          
-          set({
-            history: [...newHistory, newState],
-            historyIndex: state.historyIndex + 1,
-            canUndo: true,
-            canRedo: false
+          set((state: DesignState) => {
+            const newState: HistoryState = {
+              elements: state.elements,
+              backsideElements: state.backsideElements,
+              canvasSize: state.canvasSize,
+              canvasBackground: state.canvasBackground
+            }
+            
+            // Remove oldest states if exceeding MAX_HISTORY_STATES
+            const newHistory = [
+              ...state.history.slice(
+                Math.max(0, state.historyIndex + 1 - MAX_HISTORY_STATES),
+                state.historyIndex + 1
+              ),
+              newState
+            ]
+            
+            return {
+              history: newHistory,
+              historyIndex: newHistory.length - 1
+            }
           })
         },
         
@@ -303,7 +309,7 @@ export const useDesignStore = create<DesignState>()(
           const state = get()
           if (state.historyIndex > 0) {
             const previousState = state.history[state.historyIndex - 1]
-            set({
+            set(() => ({
               elements: previousState.elements,
               backsideElements: previousState.backsideElements,
               canvasSize: previousState.canvasSize,
@@ -311,7 +317,7 @@ export const useDesignStore = create<DesignState>()(
               historyIndex: state.historyIndex - 1,
               canUndo: state.historyIndex - 1 > 0,
               canRedo: true
-            })
+            }))
           }
         },
         
@@ -319,7 +325,7 @@ export const useDesignStore = create<DesignState>()(
           const state = get()
           if (state.historyIndex < state.history.length - 1) {
             const nextState = state.history[state.historyIndex + 1]
-            set({
+            set(() => ({
               elements: nextState.elements,
               backsideElements: nextState.backsideElements,
               canvasSize: nextState.canvasSize,
@@ -327,29 +333,29 @@ export const useDesignStore = create<DesignState>()(
               historyIndex: state.historyIndex + 1,
               canUndo: true,
               canRedo: state.historyIndex + 1 < state.history.length - 1
-            })
+            }))
           }
         },
         
         // Template related methods
         fetchTemplates: async (filter?: TemplateFilter) => {
-          set({ templateIsLoading: true, templateError: null })
+          set(() => ({ templateIsLoading: true, templateError: null }))
           
           try {
             const templates = await apiFetchTemplates(filter)
-            set({ templates, templateIsLoading: false })
+            set(() => ({ templates, templateIsLoading: false }))
             return templates
           } catch (error) {
-            set({ 
+            set(() => ({ 
               templateError: (error as Error).message, 
               templateIsLoading: false 
-            })
+            }))
             return []
           }
         },
         
-        createTemplate: async (template) => {
-          set({ templateIsLoading: true, templateError: null })
+        createTemplate: async (template: Template) => {
+          set(() => ({ templateIsLoading: true, templateError: null }))
           
           try {
             // Generate thumbnail from current design if none provided
@@ -377,7 +383,7 @@ export const useDesignStore = create<DesignState>()(
             
             if (newTemplate) {
               // Add to local templates
-              set(state => ({
+              set((state: DesignState) => ({
                 templates: [...state.templates, newTemplate],
                 templateIsLoading: false,
                 selectedTemplate: newTemplate
@@ -385,20 +391,20 @@ export const useDesignStore = create<DesignState>()(
               return newTemplate
             }
             
-            set({ templateIsLoading: false })
+            set(() => ({ templateIsLoading: false }))
             return null
             
           } catch (error) {
-            set({ 
+            set(() => ({ 
               templateError: (error as Error).message, 
               templateIsLoading: false 
-            })
+            }))
             return null
           }
         },
         
-        loadTemplate: async (templateId) => {
-          set({ templateIsLoading: true, templateError: null })
+        loadTemplate: async (templateId: string) => {
+          set(() => ({ templateIsLoading: true, templateError: null }))
           
           try {
             // First try to find in existing templates
@@ -421,27 +427,27 @@ export const useDesignStore = create<DesignState>()(
                 isShared: false // New design is not shared by default
               })
               
-              set({ 
+              set(() => ({ 
                 selectedTemplate: template,
                 templateIsLoading: false 
-              })
+              }))
               return true
             }
             
-            set({ templateIsLoading: false })
+            set(() => ({ templateIsLoading: false }))
             return false
             
           } catch (error) {
-            set({ 
+            set(() => ({ 
               templateError: (error as Error).message, 
               templateIsLoading: false 
-            })
+            }))
             return false
           }
         },
         
-        updateTemplate: async (templateId, updates) => {
-          set({ templateIsLoading: true, templateError: null })
+        updateTemplate: async (templateId: string, updates: Partial<Template>) => {
+          set(() => ({ templateIsLoading: true, templateError: null }))
           
           try {
             // If updating with current design
@@ -459,7 +465,7 @@ export const useDesignStore = create<DesignState>()(
             
             if (updatedTemplate) {
               // Update in local templates
-              set(state => ({
+              set((state: DesignState) => ({
                 templates: state.templates.map(t => 
                   t.templateId === templateId ? updatedTemplate : t
                 ),
@@ -469,27 +475,27 @@ export const useDesignStore = create<DesignState>()(
               return updatedTemplate
             }
             
-            set({ templateIsLoading: false })
+            set(() => ({ templateIsLoading: false }))
             return null
             
           } catch (error) {
-            set({ 
+            set(() => ({ 
               templateError: (error as Error).message, 
               templateIsLoading: false 
-            })
+            }))
             return null
           }
         },
         
-        deleteTemplate: async (templateId) => {
-          set({ templateIsLoading: true, templateError: null })
+        deleteTemplate: async (templateId: string) => {
+          set(() => ({ templateIsLoading: true, templateError: null }))
           
           try {
             const success = await apiDeleteTemplate(templateId)
             
             if (success) {
               // Remove from local templates
-              set(state => ({
+              set((state: DesignState) => ({
                 templates: state.templates.filter(t => t.templateId !== templateId),
                 selectedTemplate: state.selectedTemplate?.templateId === templateId 
                   ? null 
@@ -499,36 +505,36 @@ export const useDesignStore = create<DesignState>()(
               return true
             }
             
-            set({ templateIsLoading: false })
+            set(() => ({ templateIsLoading: false }))
             return false
             
           } catch (error) {
-            set({ 
+            set(() => ({ 
               templateError: (error as Error).message, 
               templateIsLoading: false 
-            })
+            }))
             return false
           }
         },
         
         fetchTemplateCategories: async () => {
-          set({ templateIsLoading: true, templateError: null })
+          set(() => ({ templateIsLoading: true, templateError: null }))
           
           try {
             const categories = await apiFetchTemplateCategories()
-            set({ templateCategories: categories, templateIsLoading: false })
+            set(() => ({ templateCategories: categories, templateIsLoading: false }))
             return categories
           } catch (error) {
-            set({ 
+            set(() => ({ 
               templateError: (error as Error).message, 
               templateIsLoading: false 
-            })
+            }))
             return []
           }
         },
         
-        setSelectedTemplate: (template) => {
-          set({ selectedTemplate: template })
+        setSelectedTemplate: (template: Template) => {
+          set(() => ({ selectedTemplate: template }))
         },
         
         // Design related methods
@@ -589,7 +595,7 @@ export const useDesignStore = create<DesignState>()(
             tags: designData?.tags || [],
             thumbnailUrl: designData?.thumbnailUrl
           }
-          set({ design: newDesign })
+          set(() => ({ design: newDesign }))
           get().loadDesign(newDesign)
         },
         
@@ -604,20 +610,38 @@ export const useDesignStore = create<DesignState>()(
           }
         },
         
-        autoSaveDesign: () => {
-          // Implement auto-save logic here
-          get().saveDesignToDatabase()
-        }
+        autoSaveDesign: (() => {
+          let timeoutId: NodeJS.Timeout
+          
+          return () => {
+            clearTimeout(timeoutId)
+            timeoutId = setTimeout(() => {
+              const state = get()
+              if (state.design?.id) {
+                state.saveDesignToDatabase()
+              }
+            }, AUTOSAVE_DELAY)
+          }
+        })()
       }),
       {
-        name: 'design-store', // Name for localStorage
-        partialize: (state) => ({
-          // Save only essential parts to localStorage
+        name: 'design-store',
+        partialize: (state: DesignState) => ({
           elements: state.elements,
           canvasSize: state.canvasSize,
           canvasBackground: state.canvasBackground,
           design: state.design
-        })
+        }),
+        version: 1,
+        migrate: (persistedState: any, version: number) => {
+          if (version === 0) {
+            return {
+              ...persistedState,
+              backsideElements: [],
+            }
+          }
+          return persistedState
+        }
       }
     )
   )

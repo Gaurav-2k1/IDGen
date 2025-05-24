@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, createContext, memo } from 'react'
+import { useState, useEffect, useMemo, createContext, memo, useCallback } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDesignStore } from '@/lib/Store'
 import { Button } from '@/components/ui/button'
@@ -114,8 +114,8 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-// Layer Item Component
-function LayerItem({ 
+// Memoize the LayerItem component
+const LayerItem = memo(function LayerItem({ 
   element, 
   isSelected, 
   onSelect, 
@@ -233,10 +233,10 @@ function LayerItem({
       </div>
     </div>
   );
-}
+})
 
-// Layer List Component (without memo)
-function LayerList({ 
+// Memoize the LayerList component
+const LayerList = memo(function LayerList({ 
   elements, 
   selectedElementId, 
   setSelectedElement, 
@@ -301,7 +301,7 @@ function LayerList({
       ))}
     </>
   );
-}
+})
 
 // Add proper types for shape types and template
 type ShapeType = 'rectangle' | 'circle' | 'triangle' | 'star';
@@ -321,73 +321,75 @@ interface CanvasPanelProps {
   onReset: () => void;
 }
 
-// Memoized Panel Components
-const CanvasPanel = memo(({ 
+// Memoize the CanvasPanel component
+const CanvasPanel = memo(function CanvasPanel({ 
   canvasSize, 
   setCanvasSize, 
   canvasBackground, 
   setCanvasBackground,
   onReset 
-}: CanvasPanelProps) => (
-  <div className="space-y-4">
-    <Panel>
-      <PanelHeader>
-        <PanelTitle>Canvas Size</PanelTitle>
-      </PanelHeader>
-      <PanelContent>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label>Width</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={canvasSize.width}
-                min={100}
-                max={2000}
-                onChange={(e) => setCanvasSize({...canvasSize, width: parseInt(e.target.value) || 100})}
-              />
-              <span className="text-xs font-medium">px</span>
+}: CanvasPanelProps) {
+  return (
+    <div className="space-y-4">
+      <Panel>
+        <PanelHeader>
+          <PanelTitle>Canvas Size</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Width</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={canvasSize.width}
+                  min={100}
+                  max={2000}
+                  onChange={(e) => setCanvasSize({...canvasSize, width: parseInt(e.target.value) || 100})}
+                />
+                <span className="text-xs font-medium">px</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Height</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={canvasSize.height}
+                  min={100}
+                  max={2000}
+                  onChange={(e) => setCanvasSize({...canvasSize, height: parseInt(e.target.value) || 100})}
+                />
+                <span className="text-xs font-medium">px</span>
+              </div>
             </div>
           </div>
-          
+        </PanelContent>
+      </Panel>
+      
+      <Panel>
+        <PanelHeader>
+          <PanelTitle>Background</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
           <div className="space-y-2">
-            <Label>Height</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={canvasSize.height}
-                min={100}
-                max={2000}
-                onChange={(e) => setCanvasSize({...canvasSize, height: parseInt(e.target.value) || 100})}
-              />
-              <span className="text-xs font-medium">px</span>
-            </div>
+            <Label>Canvas Background</Label>
+            <ColorPicker 
+              color={canvasBackground} 
+              onChange={setCanvasBackground}
+            />
           </div>
-        </div>
-      </PanelContent>
-    </Panel>
-    
-    <Panel>
-      <PanelHeader>
-        <PanelTitle>Background</PanelTitle>
-      </PanelHeader>
-      <PanelContent>
-        <div className="space-y-2">
-          <Label>Canvas Background</Label>
-          <ColorPicker 
-            color={canvasBackground} 
-            onChange={setCanvasBackground}
-          />
-        </div>
-      </PanelContent>
-    </Panel>
-    
-    <Button variant="outline" className="w-full" onClick={onReset}>
-      <Icons.RotateCcw className="mr-2 h-4 w-4" />
-      Reset Canvas
-    </Button>
-  </div>
-))
+        </PanelContent>
+      </Panel>
+      
+      <Button variant="outline" className="w-full" onClick={onReset}>
+        <Icons.RotateCcw className="mr-2 h-4 w-4" />
+        Reset Canvas
+      </Button>
+    </div>
+  )
+})
 
 // Memoize handlers at the top level
 const handleApplyTemplate = (index: number, setCanvasSize: any, setCanvasBackground: any, toast: any) => {
@@ -468,119 +470,114 @@ export function Sidebar() {
     opacity: 100,
   })
 
-  // Memoize callbacks
-  const memoizedHandlers = useMemo(() => ({
-    handleAddText: () => {
-      const { text, fontSize, fontWeight, fontFamily, textAlign, color } = textSettings;
-      addElement({
-        id: generateId(),
-        type: 'text',
-        position: { x: 50, y: 50 },
-        zIndex: elements.length + 1,
-        data: {
-          text: text.trim() || 'Sample Text',
-          fontSize,
-          fontWeight,
-          fontFamily,
-          textAlign,
-          color,
-          width: 200,
-          height: 30,
-          fontStyle: 'normal'
-        },
-        isVisible: true,
-        isLocked: false,
-      });
-      
-      toast({
-        title: "Text element added",
-        variant: "success",
-        duration: 2000
-      });
-    },
+  // Memoize handlers
+  const handleAddText = useCallback(() => {
+    const { text, fontSize, fontWeight, fontFamily, textAlign, color } = textSettings;
+    addElement({
+      id: generateId(),
+      type: 'text',
+      position: { x: 50, y: 50 },
+      zIndex: elements.length + 1,
+      data: {
+        text: text.trim() || 'Sample Text',
+        fontSize,
+        fontWeight,
+        fontFamily,
+        textAlign,
+        color,
+        width: 200,
+        height: 30,
+        fontStyle: 'normal'
+      },
+      isVisible: true,
+      isLocked: false,
+    });
+    
+    toast({
+      title: "Text element added",
+      variant: "success",
+      duration: 2000
+    });
+  }, [textSettings, elements.length, addElement, toast]);
 
-    handleAddImage: () => {
-      if (!imageSettings.url.trim()) {
-        toast({
-          title: "Image URL required",
-          description: "Please enter a valid image URL",
-          variant: "destructive",
-          duration: 3000
-        });
-        return;
-      }
-      
-      addElement({
-        id: generateId(),
-        type: 'image',
-        position: { x: 50, y: 50 },
-        zIndex: elements.length + 1,
-        data: {
-          src: imageSettings.url,
-          alt: 'User uploaded image',
-          width: 150,
-          height: 150,
-          layout: { type: 'rectangle' },
-          objectFit: 'cover',
-          objectPosition: 'center center',
-          preserveAspectRatio: imageSettings.preserveAspectRatio
-        },
-        isVisible: true,
-        isLocked: false,
-      });
-      
+  const handleAddImage = useCallback(() => {
+    if (!imageSettings.url.trim()) {
       toast({
-        title: "Image element added",
-        variant: "success",
-        duration: 2000
-      });
-    },
-
-    handleAddShape: (shapeType: ShapeType) => {
-      const { width, height, backgroundColor, borderWidth, borderColor, borderRadius, opacity } = shapeSettings;
-      
-      const adjustedWidth = shapeType === 'circle' ? width : width;
-      const adjustedHeight = shapeType === 'circle' ? width : height;
-      
-      addElement({
-        id: generateId(),
-        type: 'shape',
-        position: { x: 50, y: 50 },
-        zIndex: elements.length + 1,
-        data: {
-          shapeType: shapeType === 'circle' ? 'circle' : 'rectangle',
-          width: adjustedWidth,
-          height: adjustedHeight,
-          backgroundColor,
-          border: `${borderWidth}px solid ${borderColor}`,
-          borderRadius: shapeType === 'circle' ? undefined : borderRadius,
-          opacity: opacity / 100,
-        },
-        isVisible: true,
-        isLocked: false,
-      });
-      
-      toast({
-        title: `${shapeType.charAt(0).toUpperCase() + shapeType.slice(1)} added`,
-        variant: "success",
-        duration: 2000
-      });
-    },
-
-    handleResetCanvas: () => {
-      setCanvasSize({ width: 600, height: 400 });
-      setCanvasBackground('#ffffff');
-      
-      toast({
-        title: "Canvas reset",
-        description: "Canvas settings have been reset to default",
-        variant: "default",
+        title: "Image URL required",
+        description: "Please enter a valid image URL",
+        variant: "destructive",
         duration: 3000
       });
+      return;
     }
-  }), [textSettings, imageSettings, shapeSettings, elements.length, addElement, setCanvasSize, setCanvasBackground, toast]);
+    
+    addElement({
+      id: generateId(),
+      type: 'image',
+      position: { x: 50, y: 50 },
+      zIndex: elements.length + 1,
+      data: {
+        src: imageSettings.url,
+        alt: 'User uploaded image',
+        width: 150,
+        height: 150,
+        layout: { type: 'rectangle' },
+        objectFit: 'cover',
+        objectPosition: 'center center',
+        preserveAspectRatio: imageSettings.preserveAspectRatio
+      },
+      isVisible: true,
+      isLocked: false,
+    });
+    
+    toast({
+      title: "Image element added",
+      variant: "success",
+      duration: 2000
+    });
+  }, [imageSettings, elements.length, addElement, toast]);
 
-  // Memoize the ScrollArea content
+  const handleAddShape = useCallback((shapeType: ShapeType) => {
+    const { width, height, backgroundColor, borderWidth, borderColor, borderRadius, opacity } = shapeSettings;
+    
+    addElement({
+      id: generateId(),
+      type: 'shape',
+      position: { x: 50, y: 50 },
+      zIndex: elements.length + 1,
+      data: {
+        shapeType,
+        width: shapeType === 'circle' ? width : width,
+        height: shapeType === 'circle' ? width : height,
+        backgroundColor,
+        border: `${borderWidth}px solid ${borderColor}`,
+        borderRadius: shapeType === 'circle' ? undefined : borderRadius,
+        opacity: opacity / 100,
+      },
+      isVisible: true,
+      isLocked: false,
+    });
+    
+    toast({
+      title: `${shapeType.charAt(0).toUpperCase() + shapeType.slice(1)} added`,
+      variant: "success",
+      duration: 2000
+    });
+  }, [shapeSettings, elements.length, addElement, toast]);
+
+  const handleResetCanvas = useCallback(() => {
+    setCanvasSize({ width: 600, height: 400 });
+    setCanvasBackground('#ffffff');
+    
+    toast({
+      title: "Canvas reset",
+      description: "Canvas settings have been reset to default",
+      variant: "default",
+      duration: 3000
+    });
+  }, [setCanvasSize, setCanvasBackground, toast]);
+
+  // Memoize the scroll area content
   const scrollAreaContent = useMemo(() => (
     <ScrollArea className="flex-1">
       <div className="px-3 py-3">
@@ -777,7 +774,7 @@ export function Sidebar() {
                     />
                   </div>
                   
-                  <Button className="w-full" onClick={memoizedHandlers.handleAddText}>
+                  <Button className="w-full" onClick={handleAddText}>
                     <Icons.Type className="mr-2 h-4 w-4" />
                     Add Text
                   </Button>
@@ -795,19 +792,19 @@ export function Sidebar() {
               </AccordionTrigger>
               <AccordionContent className="p-3 pt-0 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="flex flex-col py-6" variant="outline" onClick={() => memoizedHandlers.handleAddShape('rectangle')}>
+                  <Button className="flex flex-col py-6" variant="outline" onClick={() => handleAddShape('rectangle')}>
                     <Icons.Square className="h-8 w-8 mb-1" />
                     Rectangle
                   </Button>
-                  <Button className="flex flex-col py-6" variant="outline" onClick={() => memoizedHandlers.handleAddShape('circle')}>
+                  <Button className="flex flex-col py-6" variant="outline" onClick={() => handleAddShape('circle')}>
                     <Icons.Circle className="h-8 w-8 mb-1" />
                     Circle
                   </Button>
-                  <Button className="flex flex-col py-6" variant="outline" onClick={() => memoizedHandlers.handleAddShape('triangle')}>
+                  <Button className="flex flex-col py-6" variant="outline" onClick={() => handleAddShape('triangle')}>
                     <Icons.Triangle className="h-8 w-8 mb-1" />
                     Triangle
                   </Button>
-                  <Button className="flex flex-col py-6" variant="outline" onClick={() => memoizedHandlers.handleAddShape('star')}>
+                  <Button className="flex flex-col py-6" variant="outline" onClick={() => handleAddShape('star')}>
                     <Icons.Star className="h-8 w-8 mb-1" />
                     Star
                   </Button>
@@ -890,7 +887,7 @@ export function Sidebar() {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2">
-                  <Button className="w-full" onClick={memoizedHandlers.handleAddImage}>
+                  <Button className="w-full" onClick={handleAddImage}>
                     <Icons.Image className="mr-2 h-4 w-4" />
                     Add Image
                   </Button>
@@ -930,7 +927,7 @@ export function Sidebar() {
             setCanvasSize={setCanvasSize}
             canvasBackground={canvasBackground}
             setCanvasBackground={setCanvasBackground}
-            onReset={memoizedHandlers.handleResetCanvas}
+            onReset={handleResetCanvas}
           />
         </TabsContent>
         
@@ -985,24 +982,33 @@ export function Sidebar() {
     setSelectedElement,
     setSearchQuery,
     setLayerPanelExpanded,
-    memoizedHandlers,
+    handleAddText,
+    handleAddImage,
+    handleAddShape,
+    handleResetCanvas,
     handleApplyTemplate,
     toast
   ]);
 
-  // Effect for mobile responsiveness
+  // Effect for mobile responsiveness with cleanup
   useEffect(() => {
     if (isMobile) {
-      setIsCollapsed(true)
+      setIsCollapsed(true);
     }
-  }, [isMobile])
+    return () => {
+      // Cleanup any subscriptions or timeouts if needed
+    };
+  }, [isMobile]);
 
-  // Effect for selected element
+  // Effect for selected element with cleanup
   useEffect(() => {
     if (selectedElementId) {
-      setActiveTab('elements')
+      setActiveTab('elements');
     }
-  }, [selectedElementId])
+    return () => {
+      // Cleanup any subscriptions or timeouts if needed
+    };
+  }, [selectedElementId]);
 
   return (
     <div className="relative">
