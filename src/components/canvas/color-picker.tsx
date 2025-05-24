@@ -19,7 +19,7 @@ const DEFAULT_COLORS = [
 ]
 
 interface ColorPickerProps {
-  color: string
+  color: string | null
   onChange: (color: string) => void
   className?: string
   colors?: string[]
@@ -31,11 +31,11 @@ export function ColorPicker({
   className,
   colors = DEFAULT_COLORS,
 }: ColorPickerProps) {
-  const [localColor, setLocalColor] = React.useState(color)
+  const [localColor, setLocalColor] = React.useState(color ?? '#000000')
 
   // Update local color when prop changes
   React.useEffect(() => {
-    setLocalColor(color)
+    setLocalColor(color ?? '#000000')
   }, [color])
 
   // Handle color change from input

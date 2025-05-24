@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
 import { Sidebar } from '@/components/canvas/Sidebar'
-import ErrorBoundary from '@/components/ui/error-boundary'
 import { useDesignStore } from '@/lib/Store'
 import {Canvas} from '@/components/canvas/Canvas'
 import {Toolbar} from '@/components/canvas/Toolbar'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function EditorPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { resetDesign, loadDesign, saveDesign, isLoading, error } = useDesignStore()
+  const { resetDesign, error } = useDesignStore()
+  const [showBackside, setShowBackside] = useState(false)
 
   // Reset the design when the editor is loaded
   useEffect(() => {
@@ -31,6 +32,11 @@ export default function EditorPage() {
       })
     }
   }, [error, toast])
+
+  // Handle toggling backside view
+  const handleToggleBackside = () => {
+    setShowBackside(!showBackside)
+  }
 
   return (
     <ErrorBoundary
@@ -52,11 +58,14 @@ export default function EditorPage() {
       }
     >
       <div className="flex h-screen flex-col">
-        <Toolbar />
+        <Toolbar 
+          onToggleBackside={handleToggleBackside}
+          showBackside={showBackside}
+        />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex-1 p-6 overflow-auto bg-muted/30">
-            <Canvas />
+            <Canvas showBackside={showBackside} />
           </main>
         </div>
       </div>

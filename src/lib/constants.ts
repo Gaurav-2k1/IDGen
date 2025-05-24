@@ -60,28 +60,21 @@ export const DEFAULT_SHAPE_ELEMENT = {
   borderRadius: 0,
 };
 
-// ID card template presets
-export const CARD_TEMPLATES = [
+export interface CardTemplate {
+  name: string;
+  canvasSize: { width: number; height: number; };
+  background: string;
+  previewImage?: string;
+}
+
+export const CARD_TEMPLATES: CardTemplate[] = [
   {
-    name: 'Basic ID',
-    canvasSize: { width: 350, height: 500 },
+    name: 'Default Template',
+    canvasSize: { width: 600, height: 400 },
     background: '#ffffff',
+    previewImage: '/templates/default.png'
   },
-  {
-    name: 'Company Badge',
-    canvasSize: { width: 350, height: 500 },
-    background: '#f0f9ff',
-  },
-  {
-    name: 'Student ID',
-    canvasSize: { width: 350, height: 500 },
-    background: '#f0fdf4',
-  },
-  {
-    name: 'Event Pass',
-    canvasSize: { width: 400, height: 300 },
-    background: '#fffbeb',
-  },
+  // Add more templates as needed
 ];
 
 // Local storage keys

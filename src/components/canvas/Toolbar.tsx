@@ -1,4 +1,4 @@
- 'use client'
+'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -22,17 +22,21 @@ import {
   Trash2, 
   ArrowLeft,
   CreditCard,
-  Users
+  Users,
+  RotateCw
 } from 'lucide-react'
 import ToolbarButton from '../ui/toolbar-button'
 import { createDesign, updateDesign } from '@/services/design-service'
+import { ThemeToggle } from '../theme-toggle'
 
 interface ToolbarProps {
   collaborative?: boolean
   sessionId?: string
+  onToggleBackside?: () => void
+  showBackside?: boolean
 }
 
-export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
+export function Toolbar({ collaborative, sessionId, onToggleBackside, showBackside }: ToolbarProps) {
   const router = useRouter()
   const { toast } = useToast()
   const { 
@@ -59,13 +63,14 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
   // Handle saving the design
   const handleSave = async () => {
     try {
-      saveStateToHistory() // Save current state to history
+      saveStateToHistory()
       
       const updatedDesign = {
         ...design,
         title: designTitle,
         description: designDescription,
         elements,
+        backsideElements: design?.backsideElements || [],
         canvasSize,
         canvasBackground,
         lastModified: new Date().toISOString()
@@ -165,11 +170,11 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
     })
     
     // Create new design on server
-    createNewDesign().then(newDesign => {
-      if (newDesign?.id) {
-        setDesign(newDesign)
-      }
-    })
+    // createDesign().then(newDesign => {
+    //   if (newDesign?.id) {
+    //     setDesign(newDesign)
+    //   }
+    // })
   }
   
   // Copy share URL to clipboard
@@ -234,6 +239,15 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
             <Separator orientation="vertical" className="mx-1 h-6" />
             
             <ToolbarButton 
+              icon={<RotateCw className="h-4 w-4" />} 
+              label={showBackside ? "Show Front" : "Show Back"}
+              onClick={() => onToggleBackside?.()}
+              className={cn(showBackside && "text-primary")}
+            />
+
+            <Separator orientation="vertical" className="mx-1 h-6" />
+            
+            <ToolbarButton 
               icon={<Save className="h-4 w-4" />} 
               label="Save"
               onClick={() => setSaveDialogOpen(true)}
@@ -252,11 +266,14 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
               disabled={isLoading}
               className={cn(collaborative && "text-primary")}
             />
+                              <ThemeToggle />
+
             
             {collaborative && (
               <div className="ml-2 flex items-center">
                 <div className="flex -space-x-2">
                   <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+
                     <Users className="h-4 w-4" />
                   </div>
                 </div>
@@ -341,8 +358,7 @@ export function Toolbar({ collaborative, sessionId }: ToolbarProps) {
       </Dialog>
     </>
   )
-}
-// components/Editor/ToolbarPanel.tsx
+}// components/Editor/ToolbarPanel.tsx
 // import { useState } from 'react'
 // import { useDesignStore } from '@/lib/Store'
 // import { generateId } from '@/lib/utils'

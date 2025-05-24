@@ -1,11 +1,11 @@
 // components/Canvas/Elements/ShapeElement.tsx
-import { ElementType } from '@/lib/types'
+import { ElementType, ShapeElement , ShapeElementData } from '@/lib/types'
 
 interface ShapeElementProps {
-  element: ElementType
+  element: ShapeElement
 }
 
-const ShapeElement = ({ element }: ShapeElementProps) => {
+const ShapeElementComponent = ({ element }: ShapeElementProps) => {
   const { shapeType, width, height, backgroundColor, borderRadius, borderWidth, borderColor } = element.data
   
   // Render different shape types
@@ -66,4 +66,4 @@ const ShapeElement = ({ element }: ShapeElementProps) => {
   )
 }
 
-export default ShapeElement
+export default ShapeElementComponent

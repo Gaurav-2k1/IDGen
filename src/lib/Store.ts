@@ -11,7 +11,11 @@ import {
   HistoryState,
   Template,
   TemplateFilter,
-  TemplateCategory
+  TemplateCategory,
+  DesignFilter,
+  ImageElement,
+  ShapeElement,
+  TextElement
 } from '@/lib/types'
 import {
   fetchTemplates as apiFetchTemplates,
@@ -22,11 +26,21 @@ import {
   fetchTemplateCategories as apiFetchTemplateCategories,
   generateThumbnail as apiGenerateThumbnail
 } from '@/services/template-service'
+import { v4 as uuidv4 } from 'uuid'
+import { toast } from '@/components/ui/use-toast'
 
 // Constants
 const MAX_HISTORY_STATES = 30
 const DEFAULT_CANVAS_SIZE = { width: 800, height: 600 }
 const DEFAULT_CANVAS_BACKGROUND = '#ffffff'
+
+// Initial history state
+const INITIAL_HISTORY_STATE: HistoryState = {
+  elements: [],
+  backsideElements: [],
+  canvasSize: DEFAULT_CANVAS_SIZE,
+  canvasBackground: DEFAULT_CANVAS_BACKGROUND
+}
 
 // Create the store
 export const useDesignStore = create<DesignState>()(
@@ -35,12 +49,13 @@ export const useDesignStore = create<DesignState>()(
       (set, get) => ({
         // State
         elements: [],
+        backsideElements: [],
         selectedElementId: null,
         canvasSize: DEFAULT_CANVAS_SIZE,
         canvasBackground: DEFAULT_CANVAS_BACKGROUND,
         design: null,
-        history: [],
-        historyIndex: -1,
+        history: [INITIAL_HISTORY_STATE],
+        historyIndex: 0,
         isLoading: false,
         error: null,
         isDragging: false,
@@ -52,12 +67,49 @@ export const useDesignStore = create<DesignState>()(
         templateIsLoading: false,
         templateError: null,
         
+        // Design related state
+        designs: [] as Design[],
+        designIsLoading: false,
+        designError: null,
+        
+        // Additional required properties
+        removeElement: (id: string, isBackside?: boolean) => {
+          get().deleteElement(id, isBackside)
+        },
+        toggleElementVisibility: (id: string, isBackside?: boolean) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          const element = elements.find(el => el.id === id)
+          if (element) {
+            get().updateElement(id, { isVisible: !element.isVisible }, isBackside)
+          }
+        },
+        toggleElementLock: (id: string, isBackside?: boolean) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          const element = elements.find(el => el.id === id)
+          if (element) {
+            get().updateElement(id, { isLocked: !element.isLocked }, isBackside)
+          }
+        },
+        zoomLevel: 1,
+        setZoomLevel: (level: number) => set({ zoomLevel: level }),
+        saveProject: async () => {
+          await get().saveDesignToDatabase()
+        },
+        exportProject: async () => {
+          // Implement export logic here
+          return Promise.resolve()
+        },
+        
         // Computed properties
         get canUndo() {
-          return get().historyIndex > 0
+          const state = get()
+          return state.historyIndex > 0 && state.history.length > 1
         },
         get canRedo() {
-          return get().historyIndex < get().history.length - 1
+          const state = get()
+          return state.historyIndex < state.history.length - 1
         },
         
         // Methods
@@ -69,156 +121,94 @@ export const useDesignStore = create<DesignState>()(
         
         endDrag: () => set({ isDragging: false }),
         
-        addElement: (element) => {
-          set((state) => {
-            // First save the current state to history
-            const currentState = {
-              elements: [...state.elements],
-              canvasSize: { ...state.canvasSize },
-              canvasBackground: state.canvasBackground
-            }
-            
-            // Add new element
-            const newElements = [...state.elements, element]
-            
-            // Save to history
-            const newHistory = [...state.history.slice(0, state.historyIndex + 1), currentState]
-            
-            return {
-              elements: newElements,
-              selectedElementId: element.id,
-              history: newHistory,
-              historyIndex: newHistory.length - 1
-            }
+        addElement: (element, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          set({ 
+            [isBackside ? 'backsideElements' : 'elements']: [...elements, element]
           })
         },
         
-        updateElement: (id, updates) => {
-          set((state) => {
-            const elementIndex = state.elements.findIndex(el => el.id === id)
-            if (elementIndex === -1) return state
-            
-            const updatedElements = [...state.elements]
-            updatedElements[elementIndex] = { ...updatedElements[elementIndex], ...updates }
-            
-            return { elements: updatedElements }
+        updateElement: (id, updates, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map(el => 
+              el.id === id ? { ...el, ...updates } : el
+            )
           })
         },
         
-        updateElementPosition: (id, position) => {
-          set((state) => {
-            const elementIndex = state.elements.findIndex(el => el.id === id)
-            if (elementIndex === -1) return state
-            
-            const updatedElements = [...state.elements]
-            updatedElements[elementIndex] = {
-              ...updatedElements[elementIndex],
-              position: { ...position }
-            }
-            
-            return { elements: updatedElements }
+        updateElementPosition: (id, position, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+              el.id === id ? { ...el, position } : el
+            )
           })
         },
         
-        updateElementDimensions: (id, width, height) => {
-          set((state) => {
-            const elementIndex = state.elements.findIndex(el => el.id === id)
-            if (elementIndex === -1) return state
-            
-            const element = state.elements[elementIndex]
-            const updatedElements = [...state.elements]
-            
-            // Update based on element type
-            if (element.type === 'image' || element.type === 'shape') {
-              updatedElements[elementIndex] = {
-                ...element,
-                data: {
-                  ...element.data,
-                  width,
-                  height
-                }
-              }
-            }
-            
-            return { elements: updatedElements }
+        updateMultipleElementPositions: (updates, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map(el => {
+              const update = updates.find(u => u.id === el.id)
+              return update ? { ...el, position: update.position } : el
+            })
           })
         },
         
-        deleteElement: (id) => {
-          set((state) => {
-            // First save the current state to history before deleting
-            const currentState = {
-              elements: [...state.elements],
-              canvasSize: { ...state.canvasSize },
-              canvasBackground: state.canvasBackground
-            }
-            
-            // Filter out the element to delete
-            const newElements = state.elements.filter(el => el.id !== id)
-            
-            // Save to history
-            const newHistory = [...state.history.slice(0, state.historyIndex + 1), currentState]
-            
-            return {
-              elements: newElements,
-              selectedElementId: null, // Clear selection
-              history: newHistory,
-              historyIndex: newHistory.length - 1
-            }
+        updateElementDimensions: (id, width, height, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+              el.id === id ? { ...el, data: { ...el.data, width, height } } : el
+            )
           })
         },
         
-        duplicateElement: (id) => {
-          set((state) => {
-            const elementToDuplicate = state.elements.find(el => el.id === id)
-            if (!elementToDuplicate) return state
-            
-            // Create a copy with a new ID and slightly offset position
-            const duplicatedElement: ElementType = {
-              ...JSON.parse(JSON.stringify(elementToDuplicate)),
-              id: generateId(),
+        deleteElement: (id, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.filter(el => el.id !== id)
+          })
+        },
+        
+        duplicateElement: (id, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          const element = elements.find(el => el.id === id)
+          if (element) {
+            const newElement = {
+              ...element,
+              id: Math.random().toString(36).substr(2, 9),
               position: {
-                x: elementToDuplicate.position.x + 20,
-                y: elementToDuplicate.position.y + 20
+                x: element.position.x + 20,
+                y: element.position.y + 20
               }
             }
-            
-            // Add the duplicated element
-            return {
-              elements: [...state.elements, duplicatedElement],
-              selectedElementId: duplicatedElement.id
-            }
-          })
+            set({
+              [isBackside ? 'backsideElements' : 'elements']: [...elements, newElement]
+            })
+          }
         },
         
-        updateElementZIndex: (id, direction) => {
-          set((state) => {
-            const elements = [...state.elements]
-            const elementIndex = elements.findIndex(el => el.id === id)
-            if (elementIndex === -1) return state
-            
-            // Sort elements by zIndex first
-            elements.sort((a, b) => a.zIndex - b.zIndex)
-            
-            // Find the current index after sorting
-            const sortedIndex = elements.findIndex(el => el.id === id)
-            
-            if (direction === 'up' && sortedIndex < elements.length - 1) {
-              // Swap zIndex with next element
-              const nextElement = elements[sortedIndex + 1]
-              const temp = elements[sortedIndex].zIndex
-              elements[sortedIndex].zIndex = nextElement.zIndex
-              nextElement.zIndex = temp
-            } else if (direction === 'down' && sortedIndex > 0) {
-              // Swap zIndex with previous element
-              const prevElement = elements[sortedIndex - 1]
-              const temp = elements[sortedIndex].zIndex
-              elements[sortedIndex].zIndex = prevElement.zIndex
-              prevElement.zIndex = temp
-            }
-            
-            return { elements }
-          })
+        updateElementZIndex: (id, direction, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          const element = elements.find(el => el.id === id)
+          if (element) {
+            const newZIndex = direction === 'up' ? element.zIndex + 1 : element.zIndex - 1
+            set({
+              [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+                el.id === id ? { ...el, zIndex: newZIndex } : el
+              )
+            })
+          }
         },
         
         setCanvasBackground: (color) => {
@@ -229,17 +219,32 @@ export const useDesignStore = create<DesignState>()(
           set({ canvasSize: size })
         },
         
-        moveElementForward: (id) => {
-          get().updateElementZIndex(id, 'up')
+        moveElementForward: (id, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          const maxZIndex = Math.max(...elements.map(el => el.zIndex))
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+              el.id === id ? { ...el, zIndex: maxZIndex + 1 } : el
+            )
+          })
         },
         
-        moveElementBackward: (id) => {
-          get().updateElementZIndex(id, 'down')
+        moveElementBackward: (id, isBackside = false) => {
+          const state = get()
+          const elements = isBackside ? state.backsideElements : state.elements
+          const minZIndex = Math.min(...elements.map(el => el.zIndex))
+          set({
+            [isBackside ? 'backsideElements' : 'elements']: elements.map(el =>
+              el.id === id ? { ...el, zIndex: minZIndex - 1 } : el
+            )
+          })
         },
         
         resetDesign: () => {
           set({
             elements: [],
+            backsideElements: [],
             selectedElementId: null,
             canvasSize: DEFAULT_CANVAS_SIZE,
             canvasBackground: DEFAULT_CANVAS_BACKGROUND,
@@ -252,104 +257,78 @@ export const useDesignStore = create<DesignState>()(
         loadDesign: (design) => {
           set({
             elements: design.elements || [],
-            canvasSize: design.canvasSize || DEFAULT_CANVAS_SIZE,
-            canvasBackground: design.canvasBackground || DEFAULT_CANVAS_BACKGROUND,
-            design,
-            selectedElementId: null,
-            history: [], // Clear history
-            historyIndex: -1
+            backsideElements: design.backsideElements || [],
+            canvasSize: design.canvasSize,
+            canvasBackground: design.canvasBackground,
+            design
           })
-          
-          // Add initial state to history
-          get().saveStateToHistory()
         },
         
         saveDesign: async () => {
-          const { elements, canvasSize, canvasBackground, design } = get()
-          
-          // Create a new design from current state
-          const updatedDesign: Design = {
-            ...(design || {}),
-            id: design?.id || generateId(),
-            title: design?.title || 'Untitled Design',
-            elements,
-            canvasSize,
-            canvasBackground,
+          const state = get()
+          const design = {
+            ...state.design,
+            title: state.design?.title || 'Untitled Design',
+            elements: state.elements,
+            backsideElements: state.backsideElements,
+            canvasSize: state.canvasSize,
+            canvasBackground: state.canvasBackground,
             lastModified: new Date().toISOString()
           }
-          
-          try {
-            set({ isLoading: true, error: null })
-            
-            // Here you would typically save to an API or database
-            // For now, just updating the local state
-            set({ design: updatedDesign, isLoading: false })
-            
-            // Return the saved design
-            return updatedDesign
-          } catch (error) {
-            set({ error: (error as Error).message, isLoading: false })
-            return null
-          }
+          set({ design })
+          return design
         },
         
         saveStateToHistory: () => {
-          set((state) => {
-            // Current state to save
-            const currentState: HistoryState = {
-              elements: [...state.elements],
-              canvasSize: { ...state.canvasSize },
-              canvasBackground: state.canvasBackground
-            }
-            
-            // Add to history, removing future states if we're not at the end
-            const newHistory = [
-              ...state.history.slice(0, state.historyIndex + 1),
-              currentState
-            ]
-            
-            // Limit history size
-            if (newHistory.length > MAX_HISTORY_STATES) {
-              newHistory.shift() // Remove oldest state
-            }
-            
-            return {
-              history: newHistory,
-              historyIndex: newHistory.length - 1
-            }
+          const state = get()
+          const newState: HistoryState = {
+            elements: state.elements,
+            backsideElements: state.backsideElements,
+            canvasSize: state.canvasSize,
+            canvasBackground: state.canvasBackground
+          }
+          
+          // Remove future states if we're not at the end of history
+          const newHistory = state.history.slice(0, state.historyIndex + 1)
+          
+          set({
+            history: [...newHistory, newState],
+            historyIndex: state.historyIndex + 1,
+            canUndo: true,
+            canRedo: false
           })
         },
         
         undo: () => {
-          set((state) => {
-            if (state.historyIndex <= 0) return state
-            
-            const newIndex = state.historyIndex - 1
-            const prevState = state.history[newIndex]
-            
-            return {
-              elements: [...prevState.elements],
-              canvasSize: { ...prevState.canvasSize },
-              canvasBackground: prevState.canvasBackground,
-              historyIndex: newIndex
-            }
-          })
+          const state = get()
+          if (state.historyIndex > 0) {
+            const previousState = state.history[state.historyIndex - 1]
+            set({
+              elements: previousState.elements,
+              backsideElements: previousState.backsideElements,
+              canvasSize: previousState.canvasSize,
+              canvasBackground: previousState.canvasBackground,
+              historyIndex: state.historyIndex - 1,
+              canUndo: state.historyIndex - 1 > 0,
+              canRedo: true
+            })
+          }
         },
         
         redo: () => {
-          set((state) => {
-            if (state.historyIndex >= state.history.length - 1) return state
-            
-            const newIndex = state.historyIndex + 1
-            const nextState = state.history[newIndex]
-            
-            return {
-              elements: [...nextState.elements],
-              canvasSize: { ...nextState.canvasSize },
+          const state = get()
+          if (state.historyIndex < state.history.length - 1) {
+            const nextState = state.history[state.historyIndex + 1]
+            set({
+              elements: nextState.elements,
+              backsideElements: nextState.backsideElements,
+              canvasSize: nextState.canvasSize,
               canvasBackground: nextState.canvasBackground,
-              historyIndex: newIndex
-            }
-          })
+              historyIndex: state.historyIndex + 1,
+              canUndo: true,
+              canRedo: state.historyIndex + 1 < state.history.length - 1
+            })
+          }
         },
         
         // Template related methods
@@ -427,7 +406,10 @@ export const useDesignStore = create<DesignState>()(
             
             // If not found, fetch from API
             if (!template) {
-              template = await apiGetTemplate(templateId)
+              const apiTemplate = await apiGetTemplate(templateId)
+              if (apiTemplate) {
+                template = apiTemplate
+              }
             }
             
             if (template) {
@@ -547,6 +529,84 @@ export const useDesignStore = create<DesignState>()(
         
         setSelectedTemplate: (template) => {
           set({ selectedTemplate: template })
+        },
+        
+        // Design related methods
+        fetchDesigns: async (filter?: DesignFilter) => {
+          try {
+            // Placeholder: Replace with actual API call
+            const designs: Design[] = []
+            return designs
+          } catch (error) {
+            return []
+          }
+        },
+        
+        getDesign: async (designId: string) => {
+          try {
+            // Placeholder: Replace with actual API call
+            const design = get().design
+            return design
+          } catch (error) {
+            return null
+          }
+        },
+        
+        updateDesign: async (designId: string, updates: Partial<Design>) => {
+          try {
+            // Placeholder: Replace with actual API call
+            const design = get().design
+            if (!design) return null
+            const updatedDesign = { ...design, ...updates }
+            return updatedDesign
+          } catch (error) {
+            return null
+          }
+        },
+        
+        deleteDesign: async (designId: string) => {
+          try {
+            // Placeholder: Replace with actual API call
+            return true
+          } catch (error) {
+            return false
+          }
+        },
+        
+        createNewDesign: (designData?: Partial<Design>) => {
+          const newDesign: Design = {
+            id: generateId(),
+            title: designData?.title || 'Untitled Design',
+            elements: [],
+            backsideElements: [],
+            canvasSize: designData?.canvasSize || DEFAULT_CANVAS_SIZE,
+            canvasBackground: designData?.canvasBackground || DEFAULT_CANVAS_BACKGROUND,
+            createdAt: new Date().toISOString(),
+            lastModified: new Date().toISOString(),
+            description: designData?.description || '',
+            isShared: false,
+            category: designData?.category,
+            tags: designData?.tags || [],
+            thumbnailUrl: designData?.thumbnailUrl
+          }
+          set({ design: newDesign })
+          get().loadDesign(newDesign)
+        },
+        
+        saveDesignToDatabase: async () => {
+          try {
+            // Placeholder: Replace with actual API call
+            const design = get().design
+            if (!design) return null
+            return design
+          } catch (error) {
+            return null
+          }
+        },
+        
+        autoSaveDesign: () => {
+          // Implement auto-save logic here
+          get().saveDesignToDatabase()
         }
       }),
       {
@@ -562,3 +622,25 @@ export const useDesignStore = create<DesignState>()(
     )
   )
 )
+
+// Fix filter parameter usage
+export const filterTemplates = (templates: Template[], filter?: string) => {
+  if (!filter) return templates
+  return templates.filter(template => 
+    template.title.toLowerCase().includes(filter.toLowerCase()) ||
+    (template.description?.toLowerCase() || '').includes(filter.toLowerCase())
+  )
+}
+
+// Fix designId parameter usage
+export const deleteDesign = async (designId: string) => {
+  try {
+    await fetch(`/api/designs/${designId}`, {
+      method: 'DELETE',
+    })
+    return true
+  } catch (error) {
+    console.error('Failed to delete design:', error)
+    return false
+  }
+}

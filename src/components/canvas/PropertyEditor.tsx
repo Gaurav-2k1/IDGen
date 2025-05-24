@@ -24,24 +24,73 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { ElementType } from '@/lib/types'
+import { 
+  ElementType,
+  TextElement,
+  ImageElement,
+  ShapeElement,
+  Position,
+  TextElementData,
+  ImageElementData,
+  ShapeElementData
+} from '@/lib/types'
 import { useToast } from '@/components/ui/use-toast'
 import { ColorPicker } from './color-picker'
+
+type ElementData = TextElementData | ImageElementData | ShapeElementData
+
+// Type guards
+const isTextElement = (element: ElementType): element is TextElement => element.type === 'text'
+const isImageElement = (element: ElementType): element is ImageElement => element.type === 'image'
+const isShapeElement = (element: ElementType): element is ShapeElement => element.type === 'shape'
+
+// Type-safe update helpers
+const updateTextElement = (element: TextElement, updates: Partial<TextElementData>) => ({
+  ...element,
+  data: { ...element.data, ...updates }
+})
+
+const updateImageElement = (element: ImageElement, updates: Partial<ImageElementData>) => ({
+  ...element,
+  data: { ...element.data, ...updates }
+})
+
+const updateShapeElement = (element: ShapeElement, updates: Partial<ShapeElementData>) => ({
+  ...element,
+  data: { ...element.data, ...updates }
+})
+
+// Type-safe update types
+type TextElementUpdate = { type: 'text' } & Partial<TextElementData>
+type ImageElementUpdate = { type: 'image' } & Partial<ImageElementData>
+type ShapeElementUpdate = { type: 'shape' } & Partial<ShapeElementData>
+type ElementUpdate = TextElementUpdate | ImageElementUpdate | ShapeElementUpdate
+
+interface ColorPickerProps {
+  color: string | null;
+  onChange: (color: string) => void;
+  className?: string;
+}
 
 export function PropertyEditor() {
   const { toast } = useToast()
   const { 
-    elements, 
-    selectedElementId, 
-    updateElement, 
-    deleteElement, 
-    moveElementForward, 
+    elements,
+    backsideElements, 
+    selectedElementId,
+    updateElement,
+    deleteElement,
+    moveElementForward,
     moveElementBackward,
     duplicateElement
   } = useDesignStore()
   
-  const selectedElement = elements.find(el => el.id === selectedElementId)
-  const [localElement, setLocalElement] = useState(null)
+  const [isEditingBackside, setIsEditingBackside] = useState(false)
+  const selectedElement = isEditingBackside 
+    ? backsideElements?.find(el => el.id === selectedElementId)
+    : elements?.find(el => el.id === selectedElementId)
+
+  const [localElement, setLocalElement] = useState<ElementType | null>(null)
   const [activeTab, setActiveTab] = useState('general')
   
   // Sync local state with store
@@ -54,20 +103,34 @@ export function PropertyEditor() {
   }, [selectedElement])
   
   // Update element when local state changes
-  const handleUpdate = (updatedData) => {
+  const handleUpdate = (updatedData: Partial<ElementData>) => {
     if (!selectedElementId || !localElement) return
     
-    const newData = { ...localElement.data, ...updatedData }
-    setLocalElement({ ...localElement, data: newData })
-    updateElement(selectedElementId, { data: newData })
+    let updatedElement: ElementType | null = null
+    
+    if (isTextElement(localElement)) {
+      const textUpdate: TextElementUpdate = { type: 'text', ...updatedData }
+      updatedElement = updateTextElement(localElement, textUpdate)
+    } else if (isImageElement(localElement)) {
+      const imageUpdate: ImageElementUpdate = { type: 'image', ...updatedData }
+      updatedElement = updateImageElement(localElement, imageUpdate)
+    } else if (isShapeElement(localElement)) {
+      const shapeUpdate: ShapeElementUpdate = { type: 'shape', ...updatedData }
+      updatedElement = updateShapeElement(localElement, shapeUpdate)
+    }
+    
+    if (updatedElement && selectedElementId) {
+      setLocalElement(updatedElement)
+      updateElement(selectedElementId, { data: updatedElement.data } as Partial<typeof updatedElement>, isEditingBackside)
+    }
   }
 
   // Update element position
-  const handlePositionUpdate = (axis, value) => {
+  const handlePositionUpdate = (axis: keyof Position, value: number) => {
     if (!selectedElementId || !localElement) return
 
     const newPosition = { ...localElement.position, [axis]: value }
-    updateElement(selectedElementId, { position: newPosition })
+    updateElement(selectedElementId, { position: newPosition }, isEditingBackside)
     setLocalElement({ ...localElement, position: newPosition })
   }
   
@@ -76,7 +139,7 @@ export function PropertyEditor() {
     if (!selectedElementId || !localElement) return
     
     const newVisibility = !localElement.isVisible
-    updateElement(selectedElementId, { isVisible: newVisibility })
+    updateElement(selectedElementId, { isVisible: newVisibility }, isEditingBackside)
     setLocalElement({ ...localElement, isVisible: newVisibility })
   }
   
@@ -85,13 +148,14 @@ export function PropertyEditor() {
     if (!selectedElementId || !localElement) return
     
     const newLockState = !localElement.isLocked
-    updateElement(selectedElementId, { isLocked: newLockState })
+    updateElement(selectedElementId, { isLocked: newLockState }, isEditingBackside)
     setLocalElement({ ...localElement, isLocked: newLockState })
   }
   
   const handleDuplicate = () => {
     if (!selectedElementId) return
-    duplicateElement(selectedElementId)
+    
+    duplicateElement(selectedElementId, isEditingBackside)
     
     toast({
       title: "Element duplicated",
@@ -162,8 +226,9 @@ export function PropertyEditor() {
               type="number"
               value={localElement.zIndex}
               onChange={(e) => {
+                if (!selectedElementId) return
                 const zIndex = Number(e.target.value)
-                updateElement(selectedElementId, { zIndex })
+                updateElement(selectedElementId, { zIndex }, isEditingBackside)
                 setLocalElement({ ...localElement, zIndex })
               }}
               className="w-20"
@@ -176,7 +241,10 @@ export function PropertyEditor() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => moveElementForward(selectedElementId)}
+                      onClick={() => {
+                        if (!selectedElementId) return
+                        moveElementForward(selectedElementId, isEditingBackside)
+                      }}
                       disabled={localElement.isLocked}
                     >
                       <ArrowUp className="h-4 w-4" />
@@ -194,7 +262,10 @@ export function PropertyEditor() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => moveElementBackward(selectedElementId)}
+                      onClick={() => {
+                        if (!selectedElementId) return
+                        moveElementBackward(selectedElementId, isEditingBackside)
+                      }}
                       disabled={localElement.isLocked}
                     >
                       <ArrowDown className="h-4 w-4" />
@@ -238,7 +309,7 @@ export function PropertyEditor() {
   
   // Handle text element properties
   const renderTextProperties = () => {
-    if (localElement.type !== 'text') return null
+    if (!localElement || !isTextElement(localElement)) return null
     
     return (
       <div className="space-y-4">
@@ -246,7 +317,7 @@ export function PropertyEditor() {
           <Label>Text Content</Label>
           <Input
             value={localElement.data.text}
-            onChange={(e) => handleUpdate({ text: e.target.value })}
+            onChange={(e) => handleUpdate({ text: e.target.value } as Partial<TextElementData>)}
             disabled={localElement.isLocked}
           />
         </div>
@@ -259,14 +330,14 @@ export function PropertyEditor() {
               min={8}
               max={72}
               step={1}
-              onValueChange={(value) => handleUpdate({ fontSize: value[0] })}
+              onValueChange={(value) => handleUpdate({ fontSize: value[0] } as Partial<TextElementData>)}
               className="flex-1"
               disabled={localElement.isLocked}
             />
             <Input
               type="number"
               value={localElement.data.fontSize}
-              onChange={(e) => handleUpdate({ fontSize: Number(e.target.value) })}
+              onChange={(e) => handleUpdate({ fontSize: Number(e.target.value) } as Partial<TextElementData>)}
               className="w-20"
               disabled={localElement.isLocked}
             />
@@ -274,10 +345,29 @@ export function PropertyEditor() {
         </div>
         
         <div>
+          <Label>Font Family</Label>
+          <Select
+            value={localElement.data.fontFamily}
+            onValueChange={(value) => handleUpdate({ fontFamily: value } as Partial<TextElementData>)}
+            disabled={localElement.isLocked}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select font" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Arial">Arial</SelectItem>
+              <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+              <SelectItem value="Helvetica">Helvetica</SelectItem>
+              <SelectItem value="Roboto">Roboto</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
           <Label>Font Weight</Label>
           <Select
             value={localElement.data.fontWeight}
-            onValueChange={(value) => handleUpdate({ fontWeight: value })}
+            onValueChange={(value) => handleUpdate({ fontWeight: value } as Partial<TextElementData>)}
             disabled={localElement.isLocked}
           >
             <SelectTrigger>
@@ -292,104 +382,54 @@ export function PropertyEditor() {
         </div>
         
         <div>
-          <Label>Font Family</Label>
+          <Label>Font Style</Label>
           <Select
-            value={localElement.data.fontFamily}
-            onValueChange={(value) => handleUpdate({ fontFamily: value })}
+            value={localElement.data.fontStyle}
+            onValueChange={(value: 'normal' | 'italic' | 'oblique') => handleUpdate({ fontStyle: value } as Partial<TextElementData>)}
             disabled={localElement.isLocked}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select font" />
+              <SelectValue placeholder="Select style" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Inter">Inter</SelectItem>
-              <SelectItem value="Arial">Arial</SelectItem>
-              <SelectItem value="Times New Roman">Times New Roman</SelectItem>
-              <SelectItem value="Courier New">Courier New</SelectItem>
-              <SelectItem value="Georgia">Georgia</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="italic">Italic</SelectItem>
+              <SelectItem value="oblique">Oblique</SelectItem>
             </SelectContent>
           </Select>
         </div>
         
         <div>
-          <Label>Width</Label>
-          <div className="flex items-center gap-2">
-            <Slider
-              value={[localElement.data.width || 100]}
-              min={20}
-              max={800}
-              step={1}
-              onValueChange={(value) => handleUpdate({ width: value[0] })}
-              className="flex-1"
-              disabled={localElement.isLocked}
-            />
-            <Input
-              type="number"
-              value={localElement.data.width || 100}
-              onChange={(e) => handleUpdate({ width: Number(e.target.value) })}
-              className="w-20"
-              disabled={localElement.isLocked}
-            />
-          </div>
-        </div>
-        
-        <div>
-          <Label>Height</Label>
-          <div className="flex items-center gap-2">
-            <Slider
-              value={[localElement.data.height || 24]}
-              min={10}
-              max={800}
-              step={1}
-              onValueChange={(value) => handleUpdate({ height: value[0] })}
-              className="flex-1"
-              disabled={localElement.isLocked}
-            />
-            <Input
-              type="number"
-              value={localElement.data.height || 24}
-              onChange={(e) => handleUpdate({ height: Number(e.target.value) })}
-              className="w-20"
-              disabled={localElement.isLocked}
-            />
-          </div>
-        </div>
-        
-        <div>
           <Label>Text Color</Label>
-          <ColorPicker 
-            color={localElement.data.color}
-            onChange={(color) => handleUpdate({ color })}
-            disabled={localElement.isLocked}
+          <ColorPicker
+            color={localElement.data.color ?? '#000000'}
+            onChange={(color) => handleUpdate({ color } as Partial<TextElementData>)}
           />
         </div>
         
         <div>
           <Label>Text Alignment</Label>
-          <div className="flex gap-2 mt-2">
+          <div className="flex items-center gap-2">
             <Button
-              type="button"
-              size="sm"
               variant={localElement.data.textAlign === 'left' ? 'default' : 'outline'}
-              onClick={() => handleUpdate({ textAlign: 'left' })}
+              size="sm"
+              onClick={() => handleUpdate({ textAlign: 'left' } as Partial<TextElementData>)}
               disabled={localElement.isLocked}
             >
               <AlignLeft className="h-4 w-4" />
             </Button>
             <Button
-              type="button"
-              size="sm"
               variant={localElement.data.textAlign === 'center' ? 'default' : 'outline'}
-              onClick={() => handleUpdate({ textAlign: 'center' })}
+              size="sm"
+              onClick={() => handleUpdate({ textAlign: 'center' } as Partial<TextElementData>)}
               disabled={localElement.isLocked}
             >
               <AlignCenter className="h-4 w-4" />
             </Button>
             <Button
-              type="button"
-              size="sm"
               variant={localElement.data.textAlign === 'right' ? 'default' : 'outline'}
-              onClick={() => handleUpdate({ textAlign: 'right' })}
+              size="sm"
+              onClick={() => handleUpdate({ textAlign: 'right' } as Partial<TextElementData>)}
               disabled={localElement.isLocked}
             >
               <AlignRight className="h-4 w-4" />
@@ -402,7 +442,9 @@ export function PropertyEditor() {
   
   // Handle image element properties
   const renderImageProperties = () => {
-    if (localElement.type !== 'image') return null
+    if (!localElement || !isImageElement(localElement)) return null
+    
+    const defaultLayout: ImageElementData['layout'] = { type: 'rectangle' }
     
     return (
       <div className="space-y-4">
@@ -410,7 +452,7 @@ export function PropertyEditor() {
           <Label>Image URL</Label>
           <Input
             value={localElement.data.src}
-            onChange={(e) => handleUpdate({ src: e.target.value })}
+            onChange={(e) => handleUpdate({ src: e.target.value } as Partial<ImageElementData>)}
             disabled={localElement.isLocked}
           />
         </div>
@@ -418,11 +460,57 @@ export function PropertyEditor() {
         <div>
           <Label>Alt Text</Label>
           <Input
-            value={localElement.data.alt || ''}
-            onChange={(e) => handleUpdate({ alt: e.target.value })}
+            value={localElement.data.alt ?? ''}
+            onChange={(e) => {
+              const value = e.target.value
+              handleUpdate({ alt: value || undefined } as Partial<ImageElementData>)
+            }}
             placeholder="Image description"
             disabled={localElement.isLocked}
           />
+        </div>
+
+        <div>
+          <Label>Layout Type</Label>
+          <Select
+            value={localElement.data.layout?.type ?? defaultLayout.type}
+            onValueChange={(value: 'rectangle' | 'square' | 'circle') => handleUpdate({ 
+              layout: { 
+                ...localElement.data.layout,
+                type: value 
+              }
+            } as Partial<ImageElementData>)}
+            disabled={localElement.isLocked}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select layout" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="rectangle">Rectangle</SelectItem>
+              <SelectItem value="square">Square</SelectItem>
+              <SelectItem value="circle">Circle</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label>Object Fit</Label>
+          <Select
+            value={localElement.data.objectFit ?? 'cover'}
+            onValueChange={(value: 'cover' | 'contain' | 'fill') => handleUpdate({ 
+              objectFit: value 
+            } as Partial<ImageElementData>)}
+            disabled={localElement.isLocked}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select fit mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cover">Cover</SelectItem>
+              <SelectItem value="contain">Contain</SelectItem>
+              <SelectItem value="fill">Fill</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         
         <div>
@@ -433,14 +521,14 @@ export function PropertyEditor() {
               min={20}
               max={800}
               step={1}
-              onValueChange={(value) => handleUpdate({ width: value[0] })}
+              onValueChange={(value) => handleUpdate({ width: value[0] } as Partial<ImageElementData>)}
               className="flex-1"
               disabled={localElement.isLocked}
             />
             <Input
               type="number"
               value={localElement.data.width}
-              onChange={(e) => handleUpdate({ width: Number(e.target.value) })}
+              onChange={(e) => handleUpdate({ width: Number(e.target.value) } as Partial<ImageElementData>)}
               className="w-20"
               disabled={localElement.isLocked}
             />
@@ -455,65 +543,28 @@ export function PropertyEditor() {
               min={20}
               max={800}
               step={1}
-              onValueChange={(value) => handleUpdate({ height: value[0] })}
+              onValueChange={(value) => handleUpdate({ height: value[0] } as Partial<ImageElementData>)}
               className="flex-1"
               disabled={localElement.isLocked}
             />
             <Input
               type="number"
               value={localElement.data.height}
-              onChange={(e) => handleUpdate({ height: Number(e.target.value) })}
+              onChange={(e) => handleUpdate({ height: Number(e.target.value) } as Partial<ImageElementData>)}
               className="w-20"
               disabled={localElement.isLocked}
             />
           </div>
         </div>
-        
+
         <div>
-          <Label>Border Radius</Label>
-          <div className="flex items-center gap-2">
-            <Slider
-              value={[localElement.data.borderRadius || 0]}
-              min={0}
-              max={100}
-              step={1}
-              onValueChange={(value) => handleUpdate({ borderRadius: value[0] })}
-              className="flex-1"
-              disabled={localElement.isLocked}
-            />
-            <Input
-              type="number"
-              value={localElement.data.borderRadius || 0}
-              onChange={(e) => handleUpdate({ borderRadius: Number(e.target.value) })}
-              className="w-20"
-              disabled={localElement.isLocked}
-            />
-          </div>
-        </div>
-        
-        <div>
-          <Label>Opacity</Label>
-          <div className="flex items-center gap-2">
-            <Slider
-              value={[localElement.data.opacity || 1]}
-              min={0}
-              max={1}
-              step={0.01}
-              onValueChange={(value) => handleUpdate({ opacity: value[0] })}
-              className="flex-1"
-              disabled={localElement.isLocked}
-            />
-            <Input
-              type="number"
-              value={localElement.data.opacity || 1}
-              onChange={(e) => handleUpdate({ opacity: Number(e.target.value) })}
-              className="w-20"
-              min="0"
-              max="1"
-              step="0.01"
-              disabled={localElement.isLocked}
-            />
-          </div>
+          <Label>Object Position</Label>
+          <Input
+            value={localElement.data.objectPosition}
+            onChange={(e) => handleUpdate({ objectPosition: e.target.value } as Partial<ImageElementData>)}
+            placeholder="center center"
+            disabled={localElement.isLocked}
+          />
         </div>
       </div>
     )
@@ -521,7 +572,7 @@ export function PropertyEditor() {
   
   // Handle shape element properties
   const renderShapeProperties = () => {
-    if (localElement.type !== 'shape') return null
+    if (!localElement || !isShapeElement(localElement)) return null
     
     return (
       <div className="space-y-4">
@@ -529,7 +580,7 @@ export function PropertyEditor() {
           <Label>Shape Type</Label>
           <Select
             value={localElement.data.shapeType}
-            onValueChange={(value) => handleUpdate({ shapeType: value })}
+            onValueChange={(value: 'rectangle' | 'circle') => handleUpdate({ shapeType: value } as Partial<ShapeElementData>)}
             disabled={localElement.isLocked}
           >
             <SelectTrigger>
@@ -538,7 +589,6 @@ export function PropertyEditor() {
             <SelectContent>
               <SelectItem value="rectangle">Rectangle</SelectItem>
               <SelectItem value="circle">Circle</SelectItem>
-              <SelectItem value="triangle">Triangle</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -551,14 +601,14 @@ export function PropertyEditor() {
               min={10}
               max={800}
               step={1}
-              onValueChange={(value) => handleUpdate({ width: value[0] })}
+              onValueChange={(value) => handleUpdate({ width: value[0] } as Partial<ShapeElementData>)}
               className="flex-1"
               disabled={localElement.isLocked}
             />
             <Input
               type="number"
               value={localElement.data.width}
-              onChange={(e) => handleUpdate({ width: Number(e.target.value) })}
+              onChange={(e) => handleUpdate({ width: Number(e.target.value) } as Partial<ShapeElementData>)}
               className="w-20"
               disabled={localElement.isLocked}
             />
@@ -573,14 +623,14 @@ export function PropertyEditor() {
               min={10}
               max={800}
               step={1}
-              onValueChange={(value) => handleUpdate({ height: value[0] })}
+              onValueChange={(value) => handleUpdate({ height: value[0] } as Partial<ShapeElementData>)}
               className="flex-1"
               disabled={localElement.isLocked || localElement.data.shapeType === 'circle'}
             />
             <Input
               type="number"
               value={localElement.data.height}
-              onChange={(e) => handleUpdate({ height: Number(e.target.value) })}
+              onChange={(e) => handleUpdate({ height: Number(e.target.value) } as Partial<ShapeElementData>)}
               className="w-20"
               disabled={localElement.isLocked || localElement.data.shapeType === 'circle'}
             />
@@ -589,18 +639,17 @@ export function PropertyEditor() {
         
         <div>
           <Label>Background Color</Label>
-          <ColorPicker 
-            color={localElement.data.backgroundColor}
-            onChange={(color) => handleUpdate({ backgroundColor: color })}
-            disabled={localElement.isLocked}
+          <ColorPicker
+            color={localElement.data.backgroundColor ?? '#FFFFFF'}
+            onChange={(color) => handleUpdate({ backgroundColor: color } as Partial<ShapeElementData>)}
           />
         </div>
         
         <div>
           <Label>Border</Label>
           <Input
-            value={localElement.data.border || 'none'}
-            onChange={(e) => handleUpdate({ border: e.target.value })}
+            value={localElement.data.border ?? 'none'}
+            onChange={(e) => handleUpdate({ border: e.target.value || undefined } as Partial<ShapeElementData>)}
             placeholder="1px solid #000000"
             disabled={localElement.isLocked}
           />
@@ -610,45 +659,20 @@ export function PropertyEditor() {
           <Label>Border Radius</Label>
           <div className="flex items-center gap-2">
             <Slider
-              value={[localElement.data.borderRadius || 0]}
+              value={[localElement.data.borderRadius ?? 0]}
               min={0}
               max={100}
               step={1}
-              onValueChange={(value) => handleUpdate({ borderRadius: value[0] })}
+              onValueChange={(value) => handleUpdate({ borderRadius: value[0] } as Partial<ShapeElementData>)}
               className="flex-1"
               disabled={localElement.isLocked || localElement.data.shapeType === 'circle'}
             />
             <Input
               type="number"
-              value={localElement.data.borderRadius || 0}
-              onChange={(e) => handleUpdate({ borderRadius: Number(e.target.value) })}
+              value={localElement.data.borderRadius ?? 0}
+              onChange={(e) => handleUpdate({ borderRadius: Number(e.target.value) } as Partial<ShapeElementData>)}
               className="w-20"
               disabled={localElement.isLocked || localElement.data.shapeType === 'circle'}
-            />
-          </div>
-        </div>
-        
-        <div>
-          <Label>Opacity</Label>
-          <div className="flex items-center gap-2">
-            <Slider
-              value={[localElement.data.opacity || 1]}
-              min={0}
-              max={1}
-              step={0.01}
-              onValueChange={(value) => handleUpdate({ opacity: value[0] })}
-              className="flex-1"
-              disabled={localElement.isLocked}
-            />
-            <Input
-              type="number"
-              value={localElement.data.opacity || 1}
-              onChange={(e) => handleUpdate({ opacity: Number(e.target.value) })}
-              className="w-20"
-              min="0"
-              max="1"
-              step="0.01"
-              disabled={localElement.isLocked}
             />
           </div>
         </div>
@@ -660,75 +684,86 @@ export function PropertyEditor() {
   const handleDelete = () => {
     if (!selectedElementId) return
     
+    deleteElement(selectedElementId, isEditingBackside)
+    
     toast({
       title: "Element deleted",
       description: "The element has been removed from your design"
     })
-    
-    deleteElement(selectedElementId)
   }
   
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium capitalize">{localElement.type} Properties</h3>
-        <div className="flex items-center gap-1">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleDuplicate}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Duplicate Element</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={handleLockToggle}
-                >
-                  {localElement.isLocked ? (
-                    <Lock className="h-4 w-4" />
-                  ) : (
-                    <Unlock className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{localElement.isLocked ? 'Unlock Element' : 'Lock Element'}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleDelete}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Delete Element</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <h3 className="font-medium capitalize">
+          {localElement?.type} Properties {isEditingBackside ? '(Backside)' : ''}
+        </h3>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={isEditingBackside}
+            onCheckedChange={setIsEditingBackside}
+            id="side-toggle"
+          />
+          <Label htmlFor="side-toggle">Edit Backside</Label>
         </div>
+      </div>
+      
+      <div className="flex items-center gap-1">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleDuplicate}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Duplicate Element</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleLockToggle}
+              >
+                {localElement?.isLocked ? (
+                  <Lock className="h-4 w-4" />
+                ) : (
+                  <Unlock className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{localElement?.isLocked ? 'Unlock Element' : 'Lock Element'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleDelete}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Delete Element</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
       
       <Separator />
@@ -748,9 +783,9 @@ export function PropertyEditor() {
         </TabsContent>
         
         <TabsContent value="specific" className="mt-0">
-          {localElement.type === 'text' && renderTextProperties()}
-          {localElement.type === 'image' && renderImageProperties()}
-          {localElement.type === 'shape' && renderShapeProperties()}
+          {localElement?.type === 'text' && renderTextProperties()}
+          {localElement?.type === 'image' && renderImageProperties()}
+          {localElement?.type === 'shape' && renderShapeProperties()}
         </TabsContent>
       </Tabs>
     </div>

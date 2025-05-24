@@ -18,12 +18,19 @@ export interface BaseElement {
   type: string;
   position: Position;
   zIndex: number;
-  data: any;
+  isLocked?: boolean;
+  isVisible?: boolean;
+  isTemplateLocked?: boolean;
+  data: TextElementData | ImageElementData | ShapeElementData;
 }
 
 // Text element data
 export interface TextElementData {
   text: string;
+  fieldKey?: string;  // The field identifier (e.g., 'name', 'class', 'rollNo')
+  fieldLabel?: string;  // Display label for the field (e.g., 'Student Name', 'Class')
+  isField?: boolean;  // Whether this is an ID card field
+  placeholder?: string;  // Placeholder text to show when empty
   fontSize: number;
   fontWeight: string;
   width: number;
@@ -32,6 +39,7 @@ export interface TextElementData {
   fontStyle: 'normal' | 'italic' | 'oblique';
   fontFamily: string;
   textAlign: 'left' | 'center' | 'right';
+  isTemplateLocked?: boolean;
 }
 
 // Image element data
@@ -40,16 +48,29 @@ export interface ImageElementData {
   alt?: string;
   width: number;
   height: number;
+  preserveAspectRatio?: boolean;
+  layout: {
+    type: 'square' | 'circle' | 'rectangle';
+    aspectRatio?: number; // For rectangle layout
+    maskPath?: string; // For custom shape masks
+  };
+  objectFit: 'cover' | 'contain' | 'fill';
+  objectPosition: string;
+  isTemplateLocked?: boolean;
 }
 
 // Shape element data for rectangles and circles
 export interface ShapeElementData {
-  shapeType: 'rectangle' | 'circle';
+  shapeType: 'rectangle' | 'circle' | 'triangle';
   width: number;
   height: number;
   backgroundColor: string;
   border?: string;
   borderRadius?: number;
+  borderWidth?: number;
+  borderColor?: string;
+  opacity?: number;
+  isTemplateLocked?: boolean;
 }
 
 // Typed element definitions
@@ -76,12 +97,16 @@ export interface Design {
   title: string;
   description?: string;
   elements: ElementType[];
+  backsideElements: ElementType[]; // Elements for the back of the ID card
   canvasSize: CanvasSize;
   canvasBackground: string;
+  thumbnailUrl?: string;
+  category?: string;
+  tags?: string[];
+  isShared?: boolean;
   createdAt?: string;
   lastModified?: string;
   userId?: string;
-  isShared?: boolean;
 }
 
 // Template type for saved designs
@@ -97,6 +122,7 @@ export interface Template extends Design {
 // History state for undo/redo
 export interface HistoryState {
   elements: ElementType[];
+  backsideElements: ElementType[];
   canvasSize: CanvasSize;
   canvasBackground: string;
 }
@@ -127,8 +153,6 @@ export interface CanvasSize {
   width: number
   height: number
 }
-
-
 
 export interface Design {
   id?: string
@@ -264,6 +288,7 @@ export interface Design {
   title: string;
   description?: string;
   elements: ElementType[];
+  backsideElements: ElementType[]; // Elements for the back of the ID card
   canvasSize: CanvasSize;
   canvasBackground: string;
   thumbnailUrl?: string;
@@ -277,8 +302,9 @@ export interface Design {
 
 // Update the DesignState interface to include design management methods
 export interface DesignState {
-  // Existing state properties
+  // State
   elements: ElementType[];
+  backsideElements: ElementType[];  // Elements for the back of the ID card
   selectedElementId: string | null;
   canvasSize: CanvasSize;
   canvasBackground: string;
@@ -296,31 +322,27 @@ export interface DesignState {
   templateIsLoading: boolean;
   templateError: string | null;
   
-  // Design related state (new)
-  designs: Design[];
-  designIsLoading: boolean;
-  designError: string | null;
-  
   // Computed properties
   canUndo: boolean;
   canRedo: boolean;
   
-  // Existing methods
+  // Actions
   setDesign: (design: Design | null) => void;
   setSelectedElement: (id: string | null) => void;
   startDrag: () => void;
   endDrag: () => void;
-  addElement: (element: ElementType) => void;
-  updateElement: (id: string, updates: Partial<ElementType>) => void;
-  updateElementPosition: (id: string, position: Position) => void;
-  updateElementDimensions: (id: string, width: number, height: number) => void;
-  deleteElement: (id: string) => void;
-  duplicateElement: (id: string) => void;
-  updateElementZIndex: (id: string, direction: 'up' | 'down') => void;
+  addElement: (element: ElementType, isBackside?: boolean) => void;
+  updateElement: (id: string, updates: Partial<ElementType>, isBackside?: boolean) => void;
+  updateElementPosition: (id: string, position: Position, isBackside?: boolean) => void;
+  updateMultipleElementPositions: (updates: { id: string; position: Position }[], isBackside?: boolean) => void;
+  updateElementDimensions: (id: string, width: number, height: number, isBackside?: boolean) => void;
+  deleteElement: (id: string, isBackside?: boolean) => void;
+  duplicateElement: (id: string, isBackside?: boolean) => void;
+  updateElementZIndex: (id: string, direction: 'up' | 'down', isBackside?: boolean) => void;
   setCanvasBackground: (color: string) => void;
   setCanvasSize: (size: CanvasSize) => void;
-  moveElementForward: (id: string) => void;
-  moveElementBackward: (id: string) => void;
+  moveElementForward: (id: string, isBackside?: boolean) => void;
+  moveElementBackward: (id: string, isBackside?: boolean) => void;
   resetDesign: () => void;
   loadDesign: (design: Design) => void;
   saveDesign: () => Promise<Design | null>;
@@ -345,4 +367,75 @@ export interface DesignState {
   updateDesign: (designId: string, updates: Partial<Design>) => Promise<Design | null>;
   deleteDesign: (designId: string) => Promise<boolean>;
   autoSaveDesign: () => void;
+  
+  // Additional properties
+  removeElement: (id: string, isBackside?: boolean) => void;
+  toggleElementVisibility: (id: string, isBackside?: boolean) => void;
+  toggleElementLock: (id: string, isBackside?: boolean) => void;
+  zoomLevel: number;
+  setZoomLevel: (level: number) => void;
+  saveProject: () => Promise<void>;
+  exportProject: () => Promise<void>;
 }
+
+export interface IDCardFieldDefinition {
+  key: string;          // Unique identifier (e.g., 'name', 'employeeId')
+  label: string;        // Display label (e.g., 'Full Name', 'Employee ID')
+  type: 'text' | 'number' | 'date' | 'image' | 'qrcode' | 'barcode';
+  required: boolean;
+  defaultValue?: string;
+  validation?: {
+    pattern?: string;   // Regex pattern
+    min?: number;       // For numbers/dates
+    max?: number;       // For numbers/dates
+    format?: string;    // Date format or specific format requirements
+  };
+  style?: Partial<TextElementData>;  // Default styling for this field
+}
+
+export interface IDCardTemplate extends Design {
+  templateType: 'corporate' | 'student' | 'event' | 'custom';
+  fields: {
+    [key: string]: {
+      definition: IDCardFieldDefinition;
+      position: Position;
+      isVisible: boolean;
+    }
+  };
+  defaultValues?: Record<string, string>;
+  layout: {
+    orientation: 'portrait' | 'landscape';
+    dimensions: {
+      width: number;
+      height: number;
+      unit: 'mm' | 'inch' | 'px';
+    };
+  };
+}
+
+export interface IDCardData {
+  templateId: string;
+  values: Record<string, string>;  // Key-value pairs for the card data
+  metadata?: {
+    createdAt: string;
+    updatedAt: string;
+    status: 'draft' | 'active' | 'revoked';
+    batchId?: string;
+  };
+}
+
+export interface IDCardBatch {
+  id: string;
+  templateId: string;
+  name: string;
+  cards: IDCardData[];
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  createdAt: string;
+  completedAt?: string;
+  totalCards: number;
+  processedCards: number;
+  failedCards: number;
+}
+
+// Replace any with more specific types
+export type JSONValue = string | number | boolean | null | JSONValue[] | { [key: string]: JSONValue }

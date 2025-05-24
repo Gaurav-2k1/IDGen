@@ -1,7 +1,8 @@
 // ID Card Builder - Utility Functions
-import { ClassValue, clsx } from 'clsx';
+import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { ElementType, Position } from './types';
+import { ElementType, Position, JSONValue } from './types';
+import { customAlphabet } from 'nanoid';
 
 /**
  * Combines class names with Tailwind CSS
@@ -53,7 +54,7 @@ export function isWithinElementBounds(
   // Get element dimensions based on type
   if (element.type === 'text') {
     // Estimate text width (could be improved with actual measurement)
-    width = element.data.content.length * (element.data.fontSize / 2);
+    width = element.data.text.length * (element.data.fontSize / 2);
     height = element.data.fontSize * 1.2;
   } else if (element.type === 'image') {
     width = element.data.width;
@@ -74,7 +75,7 @@ export function isWithinElementBounds(
 /**
  * Deep clone an object
  */
-export function deepClone<T>(obj: T): T {
+export function deepClone<T extends JSONValue>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 

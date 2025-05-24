@@ -38,12 +38,18 @@ const TextElement = ({ element, isSelected, readOnly }: TextElementProps) => {
     fontStyle = 'normal', 
     textAlign = 'left',
     width = 100,
-    height = 50
+    height = 50,
+    isField = false,
+    fieldKey,
+    fieldLabel,
+    placeholder = `{${fieldKey || 'text'}}`
   } = element.data
 
+  const displayText = text || (isField ? placeholder : '');
+  
   // Handle double click to start editing
   const handleDoubleClick = (e: React.MouseEvent) => {
-    if (readOnly) return
+    if (readOnly || element.isLocked) return
     
     e.stopPropagation()
     setIsEditing(true)
@@ -216,24 +222,39 @@ const TextElement = ({ element, isSelected, readOnly }: TextElementProps) => {
     position: 'relative',
     width: `${width}px`,
     height: `${height}px`,
-    outline: isSelected && !readOnly ? '1px solid #007bff' : 'none'
+    outline: isSelected && !readOnly ? '1px solid #007bff' : 'none',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
   }
   
   const textStyle: React.CSSProperties = {
     fontSize: `${fontSize}px`,
     fontFamily,
-    color,
+    color: !text && isField ? '#9CA3AF' : color,
     fontWeight,
     fontStyle,
-    textAlign: textAlign as any,
-    width: '100%',
-    height: '100%',
+    textAlign: textAlign as 'left' | 'center' | 'right',
+    flex: '1',
+    minWidth: '0',
     wordBreak: 'break-word',
     whiteSpace: 'pre-wrap',
     overflow: 'visible',
     userSelect: readOnly ? 'none' : 'text',
     cursor: readOnly ? 'default' : isEditing ? 'text' : 'move',
-    padding: '4px'
+    padding: '4px',
+    opacity: !text && isField ? 0.6 : 1
+  }
+  
+  const labelStyle: React.CSSProperties = {
+    fontSize: `${fontSize}px`,
+    fontFamily,
+    color: '#666',
+    fontWeight,
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap',
+    minWidth: 'fit-content',
+    paddingLeft: '4px'
   }
   
   // Resize handle styles
@@ -254,7 +275,13 @@ const TextElement = ({ element, isSelected, readOnly }: TextElementProps) => {
       ref={elementRef}
       style={containerStyle}
       data-element-id={element.id}
+      data-field-key={fieldKey}
     >
+      {isField && fieldLabel && (
+        <div style={labelStyle}>
+          {fieldLabel}:
+        </div>
+      )}
       <div
         ref={textRef}
         contentEditable={isEditing && !readOnly}
@@ -270,16 +297,15 @@ const TextElement = ({ element, isSelected, readOnly }: TextElementProps) => {
         }}
         onKeyDown={handleKeyDown}
         onPaste={(e) => {
-          // Handle paste to strip formatting
           if (isEditing) {
             e.preventDefault()
             const text = e.clipboardData.getData('text/plain')
             document.execCommand('insertText', false, text)
           }
         }}
-        aria-label={`Text element: ${text?.substring(0, 20)}${text?.length > 20 ? '...' : ''}`}
+        aria-label={`${fieldLabel || 'Text element'}: ${displayText?.substring(0, 20)}${displayText?.length > 20 ? '...' : ''}`}
       >
-        {text}
+        {displayText}
       </div>
       
       {/* Resize handle - only show when selected and not in read-only mode */}

@@ -1,15 +1,15 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 //import { Toaster } from '@/components/ui/toaster'
-import { ThemeProvider } from '@/components/ui/theme-provider'
+import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
-
-const inter = Inter({ subsets: ['latin'] })
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = {
-  title: 'ID Card Builder | Enterprise Solution',
-  description: 'Professional ID card design and generation platform',
+  title: 'ID Card Generator',
+  description: 'Create and manage professional ID cards with ease.',
 }
 
 export default function RootLayout({
@@ -19,16 +19,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        {/* <ThemeProvider
+      <body
+        className={cn(
+          'min-h-screen bg-background font-sans antialiased',
+          GeistSans.variable,
+          GeistMono.variable
+        )}
+      >
+        <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
-        > */}
+        >
           {children}
           <Toaster />
-        {/* </ThemeProvider> */}
+        </ThemeProvider>
       </body>
     </html>
   )

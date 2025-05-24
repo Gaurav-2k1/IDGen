@@ -1,154 +1,149 @@
 // components/Canvas/ResizeHandles.tsx
-import { useEffect, useState } from 'react'
-import { ElementType } from '@/lib/types'
+import { useState, useEffect, useCallback } from 'react'
+import { ElementType, Position } from '@/lib/types'
 
 interface ResizeHandlesProps {
   element: ElementType
+  selectedElements?: ElementType[]
   onResize: (width: number, height: number) => void
+  onGroupResize?: (elements: { id: string; width: number; height: number }[]) => void
 }
 
-const ResizeHandles = ({ element, onResize }: ResizeHandlesProps) => {
+const ResizeHandles = ({ 
+  element, 
+  selectedElements = [], 
+  onResize,
+  onGroupResize 
+}: ResizeHandlesProps) => {
   const [isResizing, setIsResizing] = useState(false)
-  const [resizeHandle, setResizeHandle] = useState<string | null>(null)
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 })
-  const [startDimensions, setStartDimensions] = useState({ width: 0, height: 0 })
-
-  // Get element dimensions based on type
-  const getElementDimensions = () => {
-    switch (element.type) {
-      case 'text':
-        return {
-          width: element.data.width || 100,
-          height: element.data.height || 50
-        }
-      case 'image':
-      case 'shape':
-        return {
-          width: element.data.width,
-          height: element.data.height
-        }
-      default:
-        return { width: 100, height: 100 }
+  const [startPos, setStartPos] = useState<Position | null>(null)
+  const [startDimensions, setStartDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [groupStartDimensions, setGroupStartDimensions] = useState<Array<{ id: string; width: number; height: number }>>([])
+  
+  const handleResizeStart = (e: React.MouseEvent) => {
+    if (element.isLocked) return
+    
+    e.stopPropagation()
+    e.preventDefault()
+    
+    setIsResizing(true)
+    setStartPos({ x: e.clientX, y: e.clientY })
+    
+    // Store initial dimensions for the main element
+    const width = 'width' in element.data ? element.data.width : 100
+    const height = 'height' in element.data ? element.data.height : 50
+    setStartDimensions({ width, height })
+    
+    // Store initial dimensions for all selected elements
+    if (selectedElements.length > 1) {
+      const dimensions = selectedElements.map(el => ({
+        id: el.id,
+        width: 'width' in el.data ? el.data.width : 100,
+        height: 'height' in el.data ? el.data.height : 50
+      }))
+      setGroupStartDimensions(dimensions)
     }
   }
 
-  const { width, height } = getElementDimensions()
-
-  // Handle resize start
-  const handleResizeStart = (e: React.MouseEvent, handle: string) => {
-    e.stopPropagation()
-    setIsResizing(true)
-    setResizeHandle(handle)
-    setStartPos({ x: e.clientX, y: e.clientY })
-    setStartDimensions({ width, height })
-  }
-
-  // Handle resizing with mouse move
-  useEffect(() => {
-    if (!isResizing || !resizeHandle) return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      e.preventDefault()
-      
-      const dx = e.clientX - startPos.x
-      const dy = e.clientY - startPos.y
-      
-      let newWidth = startDimensions.width
-      let newHeight = startDimensions.height
-      
-      // Update dimensions based on which handle is being dragged
-      switch (resizeHandle) {
-        case 'e': // right
-          newWidth = Math.max(20, startDimensions.width + dx)
-          break
-        case 'w': // left
-          newWidth = Math.max(20, startDimensions.width - dx)
-          break
-        case 's': // bottom
-          newHeight = Math.max(20, startDimensions.height + dy)
-          break
-        case 'n': // top
-          newHeight = Math.max(20, startDimensions.height - dy)
-          break
-        case 'se': // bottom-right
-          newWidth = Math.max(20, startDimensions.width + dx)
-          newHeight = Math.max(20, startDimensions.height + dy)
-          break
-        case 'sw': // bottom-left
-          newWidth = Math.max(20, startDimensions.width - dx)
-          newHeight = Math.max(20, startDimensions.height + dy)
-          break
-        case 'ne': // top-right
-          newWidth = Math.max(20, startDimensions.width + dx)
-          newHeight = Math.max(20, startDimensions.height - dy)
-          break
-        case 'nw': // top-left
-          newWidth = Math.max(20, startDimensions.width - dx)
-          newHeight = Math.max(20, startDimensions.height - dy)
-          break
-      }
-      
+  const handleResize = useCallback((e: MouseEvent) => {
+    if (!isResizing || !startPos || !startDimensions) return
+    
+    const dx = e.clientX - startPos.x
+    const dy = e.clientY - startPos.y
+    
+    // Calculate scale factors
+    const scaleX = (startDimensions.width + dx) / startDimensions.width
+    const scaleY = (startDimensions.height + dy) / startDimensions.height
+    
+    if (selectedElements.length > 1 && onGroupResize) {
+      // Resize all selected elements proportionally
+      const resizedElements = groupStartDimensions.map(el => ({
+        id: el.id,
+        width: Math.max(20, el.width * scaleX),
+        height: Math.max(20, el.height * scaleY)
+      }))
+      onGroupResize(resizedElements)
+    } else {
+      // Resize single element
+      const newWidth = Math.max(20, startDimensions.width + dx)
+      const newHeight = Math.max(20, startDimensions.height + dy)
       onResize(newWidth, newHeight)
     }
+  }, [isResizing, startPos, startDimensions, selectedElements, onGroupResize, groupStartDimensions, onResize])
 
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      setResizeHandle(null)
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', handleResize)
+      window.addEventListener('mouseup', () => {
+        setIsResizing(false)
+        setStartPos(null)
+        setStartDimensions(null)
+        setGroupStartDimensions([])
+      })
     }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('mousemove', handleResize)
+      window.removeEventListener('mouseup', () => {})
     }
-  }, [isResizing, resizeHandle, startPos, startDimensions, onResize])
+  }, [isResizing, handleResize])
+
+  const resizeHandleStyle: React.CSSProperties = {
+    position: 'absolute',
+    width: '10px',
+    height: '10px',
+    backgroundColor: '#007bff',
+    borderRadius: '50%',
+    cursor: 'nwse-resize',
+    zIndex: 1000
+  }
 
   return (
     <>
-      {/* Corner handles */}
+      {/* Bottom-right resize handle */}
       <div
+        style={{
+          ...resizeHandleStyle,
+          bottom: '-5px',
+          right: '-5px'
+        }}
+        onMouseDown={handleResizeStart}
         data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full -top-1.5 -left-1.5 cursor-nw-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'nw')}
-      />
-      <div
-        data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full -top-1.5 -right-1.5 cursor-ne-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'ne')}
-      />
-      <div
-        data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full -bottom-1.5 -left-1.5 cursor-sw-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'sw')}
-      />
-      <div
-        data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full -bottom-1.5 -right-1.5 cursor-se-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'se')}
       />
       
-      {/* Middle edge handles */}
+      {/* Bottom-left resize handle */}
       <div
+        style={{
+          ...resizeHandleStyle,
+          bottom: '-5px',
+          left: '-5px',
+          cursor: 'sw-resize'
+        }}
+        onMouseDown={handleResizeStart}
         data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full top-1/2 -left-1.5 -translate-y-1/2 cursor-w-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'w')}
       />
+      
+      {/* Top-right resize handle */}
       <div
+        style={{
+          ...resizeHandleStyle,
+          top: '-5px',
+          right: '-5px',
+          cursor: 'ne-resize'
+        }}
+        onMouseDown={handleResizeStart}
         data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full top-1/2 -right-1.5 -translate-y-1/2 cursor-e-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'e')}
       />
+      
+      {/* Top-left resize handle */}
       <div
+        style={{
+          ...resizeHandleStyle,
+          top: '-5px',
+          left: '-5px',
+          cursor: 'nw-resize'
+        }}
+        onMouseDown={handleResizeStart}
         data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full left-1/2 -top-1.5 -translate-x-1/2 cursor-n-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 'n')}
-      />
-      <div
-        data-resize-handle="true"
-        className="absolute w-3 h-3 bg-blue-500 rounded-full left-1/2 -bottom-1.5 -translate-x-1/2 cursor-s-resize z-50"
-        onMouseDown={(e) => handleResizeStart(e, 's')}
       />
     </>
   )
